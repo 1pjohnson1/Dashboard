@@ -1,0 +1,207 @@
+{
+    "name": "ds_SqlInstances",
+    "properties": {
+        "linkedServiceName": {
+            "referenceName": "ls_AzureSql",
+            "type": "LinkedServiceReference"
+        },
+        "annotations": [],
+        "type": "AzureSqlTable",
+        "typeProperties": {
+            "schema": "dbo",
+            "table": "tblInstances"
+        },
+        "schema": [
+            {
+                "name": "InstanceId",
+                "type": "int",
+                "precision": 10
+            },
+            {
+                "name": "LabProfileId",
+                "type": "int",
+                "precision": 10
+            },
+            {
+                "name": "LabProfileName",
+                "type": "nvarchar"
+            },
+            {
+                "name": "SeriesId",
+                "type": "int",
+                "precision": 10
+            },
+            {
+                "name": "SeriesName",
+                "type": "nvarchar"
+            },
+            {
+                "name": "UserId",
+                "type": "nvarchar"
+            },
+            {
+                "name": "UserFirstName",
+                "type": "nvarchar"
+            },
+            {
+                "name": "UserLastName",
+                "type": "nvarchar"
+            },
+            {
+                "name": "UserEmail",
+                "type": "nvarchar"
+            },
+            {
+                "name": "ClassId",
+                "type": "int",
+                "precision": 10
+            },
+            {
+                "name": "StartEpoch",
+                "type": "bigint",
+                "precision": 19
+            },
+            {
+                "name": "EndEpoch",
+                "type": "bigint",
+                "precision": 19
+            },
+            {
+                "name": "LastActivityEpoch",
+                "type": "bigint",
+                "precision": 19
+            },
+            {
+                "name": "ExpirationEpoch",
+                "type": "bigint",
+                "precision": 19
+            },
+            {
+                "name": "StartDateTime",
+                "type": "datetime",
+                "precision": 23,
+                "scale": 3
+            },
+            {
+                "name": "EndDateTime",
+                "type": "datetime",
+                "precision": 23,
+                "scale": 3
+            },
+            {
+                "name": "State",
+                "type": "nvarchar"
+            },
+            {
+                "name": "CompletionStatus",
+                "type": "nvarchar"
+            },
+            {
+                "name": "IpAddress",
+                "type": "nvarchar"
+            },
+            {
+                "name": "Country",
+                "type": "nvarchar"
+            },
+            {
+                "name": "Region",
+                "type": "nvarchar"
+            },
+            {
+                "name": "City",
+                "type": "nvarchar"
+            },
+            {
+                "name": "Latitude",
+                "type": "float",
+                "precision": 15
+            },
+            {
+                "name": "Longitude",
+                "type": "float",
+                "precision": 15
+            },
+            {
+                "name": "DatacenterId",
+                "type": "int",
+                "precision": 10
+            },
+            {
+                "name": "DatacenterName",
+                "type": "nvarchar"
+            },
+            {
+                "name": "LabHostId",
+                "type": "int",
+                "precision": 10
+            },
+            {
+                "name": "LabHostName",
+                "type": "nvarchar"
+            },
+            {
+                "name": "DeliveryRegionName",
+                "type": "nvarchar"
+            },
+            {
+                "name": "LastLatency",
+                "type": "int",
+                "precision": 10
+            },
+            {
+                "name": "ErrorCount",
+                "type": "int",
+                "precision": 10
+            },
+            {
+                "name": "StartupDuration",
+                "type": "int",
+                "precision": 10
+            },
+            {
+                "name": "TotalRunTime",
+                "type": "int",
+                "precision": 10
+            },
+            {
+                "name": "TimeInSession",
+                "type": "int",
+                "precision": 10
+            },
+            {
+                "name": "TaskCompletePercent",
+                "type": "float",
+                "precision": 15
+            },
+            {
+                "name": "ExamPassed",
+                "type": "bit"
+            },
+            {
+                "name": "ExamScore",
+                "type": "float",
+                "precision": 15
+            },
+            {
+                "name": "IsExam",
+                "type": "bit"
+            },
+            {
+                "name": "PlatformId",
+                "type": "int",
+                "precision": 10
+            },
+            {
+                "name": "ApiConsumer",
+                "type": "nvarchar"
+            },
+            {
+                "name": "IngestTimestamp",
+                "type": "datetime2",
+                "precision": 27,
+                "scale": 7
+            }
+        ]
+    }
+}

@@ -1,0 +1,47 @@
+{
+    "name": "ds_SqlErrors",
+    "properties": {
+        "linkedServiceName": {
+            "referenceName": "ls_AzureSql",
+            "type": "LinkedServiceReference"
+        },
+        "annotations": [],
+        "type": "AzureSqlTable",
+        "typeProperties": {
+            "schema": "dbo",
+            "table": "tblErrors"
+        },
+        "schema": [
+            {
+                "name": "InstanceId",
+                "type": "int",
+                "precision": 10
+            },
+            {
+                "name": "ErrorCode",
+                "type": "nvarchar"
+            },
+            {
+                "name": "ErrorMessage",
+                "type": "nvarchar"
+            },
+            {
+                "name": "ErrorTimestamp",
+                "type": "bigint",
+                "precision": 19
+            },
+            {
+                "name": "ErrorDateTime",
+                "type": "datetime",
+                "precision": 23,
+                "scale": 3
+            },
+            {
+                "name": "IngestTimestamp",
+                "type": "datetime2",
+                "precision": 27,
+                "scale": 7
+            }
+        ]
+    }
+}
