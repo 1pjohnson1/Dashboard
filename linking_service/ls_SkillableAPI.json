@@ -1,0 +1,18 @@
+{
+    "type": "RestService",
+    "typeProperties": {
+        "url": "https://labondemand.com/api/v3/",
+        "enableServerCertificateValidation": true,
+        "authenticationType": "Anonymous",
+        "authHeaders": {
+            "api_key": {
+                "type": "AzureKeyVaultSecret",
+                "store": {
+                    "referenceName": "ls_KeyVault",
+                    "type": "LinkedServiceReference"
+                },
+                "secretName": "SkillableApiKey"
+            }
+        }
+    }
+}

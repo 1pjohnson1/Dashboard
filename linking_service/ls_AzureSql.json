@@ -1,0 +1,7 @@
+{
+    "type": "AzureSqlDatabase",
+    "typeProperties": {
+        "connectionString": "Data Source=sql-skillable-1f54a9ce.database.windows.net;Initial Catalog=SkillableLabTelemetry;Encrypt=True;Trust Server Certificate=False",
+        "authenticationType": "SystemAssignedManagedIdentity"
+    }
+}

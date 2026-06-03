@@ -1,0 +1,158 @@
+{
+    "activities": [
+        {
+            "name": "GetFirstPageAndCount",
+            "description": "Activity 1-Web Activity: GetFirstPageAndCount",
+            "type": "WebActivity",
+            "dependsOn": [],
+            "policy": {
+                "timeout": "0.12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+            },
+            "userProperties": [],
+            "typeProperties": {
+                "method": "GET",
+                "headers": {},
+                "url": {
+                    "value": "@concat('https://labondemand.com/api/v3/labinstance/search?start=', string(pipeline().parameters.StartEpoch), '&end=', string(pipeline().parameters.EndEpoch), '&pageIndex=0&pageSize=', string(pipeline().parameters.PageSize), '&sort=start%20desc&mode=10')",
+                    "type": "Expression"
+                }
+            }
+        },
+        {
+            "name": "SetTotalPages",
+            "type": "SetVariable",
+            "dependsOn": [],
+            "policy": {
+                "secureOutput": false,
+                "secureInput": false
+            },
+            "userProperties": [],
+            "typeProperties": {
+                "variableName": "TotalPages",
+                "value": "@add(div(activity('GetFirstPageAndCount').output.TotalCount, pipeline().parameters.PageSize), if(equals(mod(activity('GetFirstPageAndCount').output.TotalCount, pipeline().parameters.PageSize), 0), 0, 1))"
+            }
+        },
+        {
+            "name": "BuildPageArray",
+            "type": "SetVariable",
+            "dependsOn": [],
+            "policy": {
+                "secureOutput": false,
+                "secureInput": false
+            },
+            "userProperties": [],
+            "typeProperties": {
+                "variableName": "PageArray",
+                "value": [
+                    "@range(0",
+                    " variables('TotalPages'))"
+                ]
+            }
+        },
+        {
+            "name": "ForEachPage",
+            "type": "ForEach",
+            "dependsOn": [],
+            "userProperties": [],
+            "typeProperties": {
+                "items": {
+                    "value": "@variables('PageArray')",
+                    "type": "Expression"
+                },
+                "isSequential": true,
+                "activities": [
+                    {
+                        "name": "CopySearchResultsToSql",
+                        "type": "Copy",
+                        "dependsOn": [],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "source": {
+                                "type": "RestSource",
+                                "httpRequestTimeout": "00:01:40",
+                                "requestInterval": "00.00:00:00.010",
+                                "requestMethod": "GET",
+                                "paginationRules": {
+                                    "supportRFC5988": "true"
+                                }
+                            },
+                            "sink": {
+                                "type": "AzureSqlSink",
+                                "writeBehavior": "upsert",
+                                "upsertSettings": {
+                                    "useTempDB": true,
+                                    "keys": {
+                                        "value": "@createArray('Id')\n",
+                                        "type": "Expression"
+                                    }
+                                },
+                                "sqlWriterUseTableLock": false,
+                                "disableMetricsCollection": false
+                            },
+                            "enableStaging": false,
+                            "translator": {
+                                "type": "TabularTranslator",
+                                "mapComplexValuesToString": false
+                            }
+                        },
+                        "inputs": [
+                            {
+                                "referenceName": "ds_SkillableSearch",
+                                "type": "DatasetReference",
+                                "parameters": {}
+                            }
+                        ],
+                        "outputs": [
+                            {
+                                "referenceName": "ds_SqlInstances",
+                                "type": "DatasetReference",
+                                "parameters": {}
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    ],
+    "policy": {
+        "elapsedTimeMetric": {}
+    },
+    "parameters": {
+        "StartEpoch": {
+            "type": "int"
+        },
+        "EndEpoch": {
+            "type": "int"
+        },
+        "PageSize": {
+            "type": "int",
+            "defaultValue": 100
+        }
+    },
+    "variables": {
+        "TotalResults": {
+            "type": "Integer",
+            "defaultValue": 0
+        },
+        "TotalPages": {
+            "type": "Integer",
+            "defaultValue": 0
+        },
+        "PageArray": {
+            "type": "Array",
+            "defaultValue": []
+        }
+    },
+    "annotations": []
+}

@@ -1,0 +1,5 @@
+List all resources
+az resource list --resource-group rg-skillable-dashboard --output table
+
+# Check ADF pipelines
+az datafactory pipeline list --factory-name adf-skillable-dashboard --resource-group rg-skillable-dashboard --output table

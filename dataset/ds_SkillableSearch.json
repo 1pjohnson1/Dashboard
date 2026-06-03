@@ -1,15 +1,12 @@
 {
-    "name": "ds_SkillableSearch",
-    "properties": {
-        "linkedServiceName": {
-            "referenceName": "ls_SkillableAPI",
-            "type": "LinkedServiceReference"
-        },
-        "annotations": [],
-        "type": "RestResource",
-        "typeProperties": {
-            "relativeUrl": ""
-        },
-        "schema": []
-    }
+    "linkedServiceName": {
+        "referenceName": "ls_SkillableAPI",
+        "type": "LinkedServiceReference"
+    },
+    "annotations": [],
+    "type": "RestResource",
+    "typeProperties": {
+        "relativeUrl": ""
+    },
+    "schema": []
 }
