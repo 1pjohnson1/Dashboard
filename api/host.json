@@ -15,7 +15,7 @@
   },
   "extensions": {
     "http": {
-      "routePrefix": "",
+      "routePrefix": "api",
       "maxOutstandingRequests": 200,
       "maxConcurrentRequests": 100
     }
