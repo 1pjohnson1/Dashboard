@@ -49,10 +49,11 @@ app.http("GetConcurrentLaunches", {
             return {
                 status: 200,
                 jsonBody: {
-                    hourlyLaunches,
-                    peakConcurrent: peakConcurrent[0] || { ConcurrentCount: 0 },
-                    timeline,
-                    hours,
+                        maxConcurrent: peakConcurrent[0] ? peakConcurrent[0].ConcurrentCount : 0,
+                                            thresholdBreached: peakConcurrent[0] ? peakConcurrent[0].ConcurrentCount > 4 : false,
+                                            windows: timeline.map(t => ({ windowStart: t.TimeBucket, windowEnd: t.TimeBucket, concurrentCount: t.Count, region: 'All', thresholdBreached: t.Count > 4 })),
+                                            byRegion: hourlyLaunches.map(h => ({ hour: h.HourOfDay, launchCount: h.LaunchCount })),
+                                            hours,
                 },
             };
         } catch (error) {
