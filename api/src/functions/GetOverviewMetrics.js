@@ -58,11 +58,19 @@ app.http('GetOverviewMetrics', {
 			            return {
 							                status: 200,
 							                jsonBody: {
-												                    summary: { ...summary, ErrorRate: parseFloat(errorRate) },
-												                    byState,
-												                    topLabProfiles: topLabs,
-												                    dailyTrend,
-												                    days,
+												                                            totalInstances: summary.TotalInstances || 0,
+												                        successRate: summary.TotalInstances ? parseFloat(((1 - (summary.TotalErrors || 0) / summary.TotalInstances) * 100).toFixed(1)) : 100,
+												                        completedInstances: (byState.find(s => s.State === 'Complete') || {}).Count || 0,
+												                        avgLatency: Math.round(summary.AvgStartupDuration || 0),
+												                        activeLabsNow: (byState.find(s => s.State === 'Building' || s.State === 'Running') || {}).Count || 0,
+												                        totalErrors: summary.TotalErrors || 0,
+												                        errorRate: parseFloat(errorRate),
+												                        creationFailures: (byState.find(s => s.State === 'Error') || {}).Count || 0,
+												                        avgStartupDuration: Math.round(summary.AvgStartupDuration || 0),
+												                        periodDays: days,
+												                        statusBreakdown: byState.map(s => ({ status: s.State, count: s.Count })),
+												                        topLabProfiles: topLabs.map(l => ({ labProfileName: l.LabProfileName, count: l.Count })),
+												                        launchesOverTime: dailyTrend.map(d => ({ hour: d.Day, launches: d.Count, errors: 0 })),
 											},
 						};
 					} catch (error) {
