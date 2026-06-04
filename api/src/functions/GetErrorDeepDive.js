@@ -1,5 +1,5 @@
-import { app } from "@azure/functions";
-import { executeQuery, TYPES } from "../shared/sql.js";
+const { app } = require('@azure/functions');
+const { executeQuery, TYPES } = require('../shared/sql.js');
 
 app.http("GetErrorDeepDive", {
     methods: ["GET"],
