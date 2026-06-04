@@ -70,12 +70,15 @@ app.http("GetOverviewMetrics", {
                     days,
                 },
             };
-        } catch (error) {
+	} catch (error) {
             context.error("GetOverviewMetrics error:", error);
             return {
                 status: 500,
-                jsonBody: { error: error.message || "Internal server error" },
+                jsonBody: { 
+                    error: error.message || "Internal server error",
+                    code: error.code || "UNKNOWN",
+                    stack: error.stack || "",
+                    details: JSON.stringify(error)
+                },
             };
         }
-    },
-});
