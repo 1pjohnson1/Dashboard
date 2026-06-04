@@ -73,12 +73,14 @@ app.http("GetGeoBucketAnalysis", {
             return {
                 status: 200,
                 jsonBody: {
-                    byCountry,
-                    byRegion,
-                    byCity,
-                    availableRegions: regions.map((r) => r.Region),
-                    days,
-                    region,
+                        byCountry,
+                                            byRegion,
+                                            byCity,
+                                            availableRegions: regions.map((r) => r.Region),
+                                            days,
+                                            region,
+                                            regions: byRegion.map(r => ({ region: r.Region, totalLaunches: r.Count, errorRate: 0, avgLatency: 0 })),
+                                            geoBuckets: byCity.map(c => ({ ipAddress: '', country: c.Country, region: c.City, launchCount: c.Count, seriesName: '' })),
                 },
             };
         } catch (error) {
