@@ -74,6 +74,7 @@ app.http('GetOverviewMetrics', {
 															                    code: error.code || 'UNKNOWN',
 															                    stack: error.stack,
 															                    details: JSON.stringify(error),
+															                                        aggErrors: error.errors ? error.errors.map(e => ({ msg: e.message, code: e.code, type: e.constructor ? e.constructor.name : 'unknown' })) : null,
 														},
 									};
 					}
