@@ -45,7 +45,7 @@
   },
   "variables": {
     "factoryId": "[resourceId('Microsoft.DataFactory/factories', parameters('factoryName'))]",
-    "sqlConnectionString": "[concat('Server=tcp:', parameters('sqlServerName'), ',1433;Database=', parameters('sqlDatabaseName'), ';User ID=', parameters('sqlAdminUser'), ';Password=', parameters('sqlAdminPassword'), ';Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;')]"
+    "sqlConnectionString": "[concat('Server=tcp:', parameters('sqlServerName'), '.database.windows.net,1433;Database=', parameters('sqlDatabaseName'), ';User ID=', parameters('sqlAdminUser'), ';Password=', parameters('sqlAdminPassword'), ';Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;')]"
   },
   "resources": [
     {
