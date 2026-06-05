@@ -250,7 +250,7 @@
             "typeProperties": {
               "variableName": "TotalPages",
               "value": {
-                "value": "@add(div(activity('GetFirstPageAndCount').output.TotalCount, pipeline().parameters.PageSize), if(equals(mod(activity('GetFirstPageAndCount').output.TotalCount, pipeline().parameters.PageSize), 0), 0, 1))",
+                "value": "@add(div(activity('GetFirstPageAndCount').output.TotalResults, pipeline().parameters.PageSize), if(equals(mod(activity('GetFirstPageAndCount').output.TotalResults, pipeline().parameters.PageSize), 0), 0, 1))",
                 "type": "Expression"
               }
             }
