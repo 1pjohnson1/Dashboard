@@ -1,507 +1,524 @@
-{
-  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-  "contentVersion": "1.0.0.0",
-  "parameters": {
-    "factoryName": {
-      "type": "string",
-      "defaultValue": "adf-skillable-dashboard",
-      "metadata": {
-        "description": "Name of the Azure Data Factory instance"
-      }
-    },
-    "location": {
-      "type": "string",
-      "defaultValue": "[resourceGroup().location]",
-      "metadata": {
-        "description": "Azure region for resources"
-      }
-    },
-    "sqlServerName": {
-      "type": "string",
-      "metadata": {
-        "description": "Fully qualified SQL server name (e.g., sql-skillable-xxxx.database.windows.net)"
-      }
-    },
-    "sqlDatabaseName": {
-      "type": "string",
-      "defaultValue": "SkillableLabTelemetry",
-      "metadata": {
-        "description": "SQL Database name"
-      }
-    },
-    "sqlAdminUser": {
-      "type": "string",
-      "defaultValue": "sqladmin",
-      "metadata": {
-        "description": "SQL admin username"
-      }
-    },
-    "sqlAdminPassword": {
-      "type": "securestring",
-      "metadata": {
-        "description": "SQL admin password"
-      }
-    }
-  },
-  "variables": {
-    "factoryId": "[resourceId('Microsoft.DataFactory/factories', parameters('factoryName'))]",
-    "sqlConnectionString": "[concat('Server=tcp:', parameters('sqlServerName'), '.database.windows.net,1433;Database=', parameters('sqlDatabaseName'), ';User ID=', parameters('sqlAdminUser'), ';Password=', parameters('sqlAdminPassword'), ';Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;')]"
-  },
-  "resources": [
-    {
-      "type": "Microsoft.DataFactory/factories",
-      "apiVersion": "2018-06-01",
-      "name": "[parameters('factoryName')]",
-      "location": "[parameters('location')]",
-      "identity": {
-        "type": "SystemAssigned"
-      },
-      "properties": {}
-    },
-    {
-      "type": "Microsoft.DataFactory/factories/linkedServices",
-      "apiVersion": "2018-06-01",
-      "name": "[concat(parameters('factoryName'), '/ls_KeyVault')]",
-      "dependsOn": [
-        "[variables('factoryId')]"
-      ],
-      "properties": {
-        "type": "AzureKeyVault",
-        "typeProperties": {
-          "baseUrl": "https://kv-skillable-dashboard.vault.azure.net/"
-        }
-      }
-    },
-    {
-      "type": "Microsoft.DataFactory/factories/linkedServices",
-      "apiVersion": "2018-06-01",
-      "name": "[concat(parameters('factoryName'), '/ls_SkillableAPI')]",
-      "dependsOn": [
-        "[variables('factoryId')]",
-        "[resourceId('Microsoft.DataFactory/factories/linkedServices', parameters('factoryName'), 'ls_KeyVault')]"
-      ],
-      "properties": {
-        "type": "RestService",
-        "typeProperties": {
-          "url": "https://labondemand.com/api/v3/",
-          "enableServerCertificateValidation": true,
-          "authenticationType": "Anonymous",
-          "authHeaders": {
-            "api_key": {
-              "type": "AzureKeyVaultSecret",
-              "store": {
-                "referenceName": "ls_KeyVault",
-                "type": "LinkedServiceReference"
-              },
-              "secretName": "SkillableApiKey"
-            }
-          }
-        }
-      }
-    },
-    {
-      "type": "Microsoft.DataFactory/factories/linkedServices",
-      "apiVersion": "2018-06-01",
-      "name": "[concat(parameters('factoryName'), '/ls_AzureSql')]",
-      "dependsOn": [
-        "[variables('factoryId')]"
-      ],
-      "properties": {
-        "type": "AzureSqlDatabase",
-        "typeProperties": {
-          "connectionString": "[variables('sqlConnectionString')]"
-        }
-      }
-    },
-    {
-      "type": "Microsoft.DataFactory/factories/datasets",
-      "apiVersion": "2018-06-01",
-      "name": "[concat(parameters('factoryName'), '/ds_SkillableSearch')]",
-      "dependsOn": [
-        "[variables('factoryId')]",
-        "[resourceId('Microsoft.DataFactory/factories/linkedServices', parameters('factoryName'), 'ls_SkillableAPI')]"
-      ],
-      "properties": {
-        "type": "RestResource",
-        "linkedServiceName": {
-          "referenceName": "ls_SkillableAPI",
-          "type": "LinkedServiceReference"
-        },
-        "typeProperties": {}
-      }
-    },
-    {
-      "type": "Microsoft.DataFactory/factories/datasets",
-      "apiVersion": "2018-06-01",
-      "name": "[concat(parameters('factoryName'), '/ds_SqlInstances')]",
-      "dependsOn": [
-        "[variables('factoryId')]",
-        "[resourceId('Microsoft.DataFactory/factories/linkedServices', parameters('factoryName'), 'ls_AzureSql')]"
-      ],
-      "properties": {
-        "type": "AzureSqlTable",
-        "linkedServiceName": {
-          "referenceName": "ls_AzureSql",
-          "type": "LinkedServiceReference"
-        },
-        "typeProperties": {
-          "tableName": "dbo.tblInstances"
-        }
-      }
-    },
-    {
-      "type": "Microsoft.DataFactory/factories/pipelines",
-      "apiVersion": "2018-06-01",
-      "name": "[concat(parameters('factoryName'), '/pl_SkillableDataIngestion')]",
-      "dependsOn": [
-        "[variables('factoryId')]",
-        "[resourceId('Microsoft.DataFactory/factories/datasets', parameters('factoryName'), 'ds_SkillableSearch')]",
-        "[resourceId('Microsoft.DataFactory/factories/datasets', parameters('factoryName'), 'ds_SqlInstances')]",
-        "[resourceId('Microsoft.DataFactory/factories/linkedServices', parameters('factoryName'), 'ls_AzureSql')]",
-        "[resourceId('Microsoft.DataFactory/factories/linkedServices', parameters('factoryName'), 'ls_KeyVault')]"
-      ],
-      "properties": {
-        "activities": [
-          {
-            "name": "GetApiKey",
-            "type": "WebActivity",
-            "policy": {
-              "timeout": "0.12:00:00",
-              "retry": 0,
-              "retryIntervalInSeconds": 30,
-              "secureOutput": false,
-              "secureInput": false
-            },
-            "typeProperties": {
-              "method": "GET",
-              "url": "https://kv-skillable-dashboard.vault.azure.net/secrets/SkillableApiKey?api-version=7.0",
-              "authentication": {
-                "type": "MSI",
-                "resource": "https://vault.azure.net"
-              }
-            }
-          },
-          {
-            "name": "SetApiKey",
-            "type": "SetVariable",
-            "dependsOn": [
-              {
-                "activity": "GetApiKey",
-                "dependencyConditions": [
-                  "Succeeded"
-                ]
-              }
-            ],
-            "policy": {
-              "secureInput": false,
-              "secureOutput": true
-            },
-            "typeProperties": {
-              "variableName": "ApiKeyVar",
-              "value": {
-                "value": "@activity('GetApiKey').output.value",
-                "type": "Expression"
-              }
-            }
-          },
-          {
-            "name": "GetFirstPageAndCount",
-            "type": "WebActivity",
-            "dependsOn": [
-              {
-                "activity": "SetApiKey",
-                "dependencyConditions": [
-                  "Succeeded"
-                ]
-              }
-            ],
-            "policy": {
-              "timeout": "0.12:00:00",
-              "retry": 2,
-              "retryIntervalInSeconds": 60,
-              "secureOutput": false,
-              "secureInput": false
-            },
-            "typeProperties": {
-              "method": "GET",
-              "headers": {
-                "api_key": {
-                  "value": "@variables('ApiKeyVar')",
-                  "type": "Expression"
-                },
-                "User-Agent": "AzureDataFactory/1.0"
-              },
-              "url": {
-                "value": "@concat('https://labondemand.com/api/v3/labinstance/search?start=', string(pipeline().parameters.StartEpoch), '&end=', string(pipeline().parameters.EndEpoch), '&pageIndex=0&pageSize=', string(pipeline().parameters.PageSize), '&sort=start%20desc&mode=10')",
-                "type": "Expression"
-              },
-              "httpRequestTimeout": "00:05:00"
-            }
-          },
-          {
-            "name": "SetTotalPages",
-            "type": "SetVariable",
-            "dependsOn": [
-              {
-                "activity": "GetFirstPageAndCount",
-                "dependencyConditions": [
-                  "Succeeded"
-                ]
-              }
-            ],
-            "typeProperties": {
-              "variableName": "TotalPages",
-              "value": {
-                "value": "@add(div(activity('GetFirstPageAndCount').output.TotalResults, pipeline().parameters.PageSize), if(equals(mod(activity('GetFirstPageAndCount').output.TotalResults, pipeline().parameters.PageSize), 0), 0, 1))",
-                "type": "Expression"
-              }
-            }
-          },
-          {
-            "name": "BuildPageArray",
-            "type": "SetVariable",
-            "dependsOn": [
-              {
-                "activity": "SetTotalPages",
-                "dependencyConditions": [
-                  "Succeeded"
-                ]
-              }
-            ],
-            "typeProperties": {
-              "variableName": "PageArray",
-              "value": {
-                "value": "@range(0, variables('TotalPages'))",
-                "type": "Expression"
-              }
-            }
-          },
-          {
-            "name": "ForEachPage",
-            "type": "ForEach",
-            "dependsOn": [
-              {
-                "activity": "BuildPageArray",
-                "dependencyConditions": [
-                  "Succeeded"
-                ]
-              }
-            ],
-            "typeProperties": {
-              "items": {
-                "value": "@variables('PageArray')",
-                "type": "Expression"
-              },
-              "isSequential": true,
-              "activities": [
-                {
-                  "name": "CopySearchResultsToSql",
-                  "type": "Copy",
-                  "typeProperties": {
-                    "source": {
-                      "type": "RestSource",
-                      "httpRequestTimeout": "00:02:00",
-                      "requestInterval": "00.00:00:01.000",
-                      "additionalHeaders": {},
-                      "requestBody": "",
-                      "requestMethod": "GET"
-                    },
-                    "sink": {
-                      "type": "AzureSqlSink",
-                      "sqlWriterStoredProcedureName": "dbo.usp_UpsertInstance",
-                      "sqlWriterTableType": "dbo.InstanceTableType",
-                      "storedProcedureTableTypeParameterName": "InstanceData"
-                    },
-                    "enableStaging": false
+﻿{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "parameters":  {
+                       "factoryName":  {
+                                           "type":  "string",
+                                           "defaultValue":  "adf-skillable-dashboard",
+                                           "metadata":  {
+                                                            "description":  "Name of the Azure Data Factory instance"
+                                                        }
+                                       },
+                       "location":  {
+                                        "type":  "string",
+                                        "defaultValue":  "[resourceGroup().location]",
+                                        "metadata":  {
+                                                         "description":  "Azure region for resources"
+                                                     }
+                                    },
+                       "sqlServerName":  {
+                                             "type":  "string",
+                                             "metadata":  {
+                                                              "description":  "Fully qualified SQL server name (e.g., sql-skillable-xxxx.database.windows.net)"
+                                                          }
+                                         },
+                       "sqlDatabaseName":  {
+                                               "type":  "string",
+                                               "defaultValue":  "SkillableLabTelemetry",
+                                               "metadata":  {
+                                                                "description":  "SQL Database name"
+                                                            }
+                                           },
+                       "sqlAdminUser":  {
+                                            "type":  "string",
+                                            "defaultValue":  "sqladmin",
+                                            "metadata":  {
+                                                             "description":  "SQL admin username"
+                                                         }
+                                        },
+                       "sqlAdminPassword":  {
+                                                "type":  "securestring",
+                                                "metadata":  {
+                                                                 "description":  "SQL admin password"
+                                                             }
+                                            }
+                   },
+    "variables":  {
+                      "factoryId":  "[resourceId(\u0027Microsoft.DataFactory/factories\u0027, parameters(\u0027factoryName\u0027))]",
+                      "sqlConnectionString":  "[concat(\u0027Server=tcp:\u0027, parameters(\u0027sqlServerName\u0027), \u0027.database.windows.net,1433;Database=\u0027, parameters(\u0027sqlDatabaseName\u0027), \u0027;User ID=\u0027, parameters(\u0027sqlAdminUser\u0027), \u0027;Password=\u0027, parameters(\u0027sqlAdminPassword\u0027), \u0027;Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;\u0027)]"
                   },
-                  "inputs": [
-                    {
-                      "referenceName": "ds_SkillableSearch",
-                      "type": "DatasetReference",
-                      "parameters": {
-                        "relativeUrl": {
-                          "value": "@concat('labinstance/search?start=', string(pipeline().parameters.StartEpoch), '&end=', string(pipeline().parameters.EndEpoch), '&pageIndex=', string(item()), '&pageSize=', string(pipeline().parameters.PageSize), '&sort=start%20desc&mode=10')",
-                          "type": "Expression"
-                        }
+    "resources":  [
+                      {
+                          "type":  "Microsoft.DataFactory/factories",
+                          "apiVersion":  "2018-06-01",
+                          "name":  "[parameters(\u0027factoryName\u0027)]",
+                          "location":  "[parameters(\u0027location\u0027)]",
+                          "identity":  {
+                                           "type":  "SystemAssigned"
+                                       },
+                          "properties":  {
+
+                                         }
+                      },
+                      {
+                          "type":  "Microsoft.DataFactory/factories/linkedServices",
+                          "apiVersion":  "2018-06-01",
+                          "name":  "[concat(parameters(\u0027factoryName\u0027), \u0027/ls_KeyVault\u0027)]",
+                          "dependsOn":  [
+                                            "[variables(\u0027factoryId\u0027)]"
+                                        ],
+                          "properties":  {
+                                             "type":  "AzureKeyVault",
+                                             "typeProperties":  {
+                                                                    "baseUrl":  "https://kv-skillable-dashboard.vault.azure.net/"
+                                                                }
+                                         }
+                      },
+                      {
+                          "type":  "Microsoft.DataFactory/factories/linkedServices",
+                          "apiVersion":  "2018-06-01",
+                          "name":  "[concat(parameters(\u0027factoryName\u0027), \u0027/ls_SkillableAPI\u0027)]",
+                          "dependsOn":  [
+                                            "[variables(\u0027factoryId\u0027)]",
+                                            "[resourceId(\u0027Microsoft.DataFactory/factories/linkedServices\u0027, parameters(\u0027factoryName\u0027), \u0027ls_KeyVault\u0027)]"
+                                        ],
+                          "properties":  {
+                                             "type":  "RestService",
+                                             "typeProperties":  {
+                                                                    "url":  "https://labondemand.com/api/v3/",
+                                                                    "enableServerCertificateValidation":  true,
+                                                                    "authenticationType":  "Anonymous",
+                                                                    "authHeaders":  {
+                                                                                        "api_key":  {
+                                                                                                        "type":  "AzureKeyVaultSecret",
+                                                                                                        "store":  {
+                                                                                                                      "referenceName":  "ls_KeyVault",
+                                                                                                                      "type":  "LinkedServiceReference"
+                                                                                                                  },
+                                                                                                        "secretName":  "SkillableApiKey"
+                                                                                                    }
+                                                                                    }
+                                                                }
+                                         }
+                      },
+                      {
+                          "type":  "Microsoft.DataFactory/factories/linkedServices",
+                          "apiVersion":  "2018-06-01",
+                          "name":  "[concat(parameters(\u0027factoryName\u0027), \u0027/ls_AzureSql\u0027)]",
+                          "dependsOn":  [
+                                            "[variables(\u0027factoryId\u0027)]"
+                                        ],
+                          "properties":  {
+                                             "type":  "AzureSqlDatabase",
+                                             "typeProperties":  {
+                                                                    "connectionString":  "Data Source=sql-skillable-1f54a9ce.database.windows.net;Initial Catalog=SkillableLabTelemetry;User ID=sqladmin;Encrypt=True;TrustServerCertificate=False",
+                                                                    "password":  {
+                                                                                     "store":  {
+                                                                                                   "referenceName":  "ls_KeyVault",
+                                                                                                   "type":  "LinkedServiceReference"
+                                                                                               },
+                                                                                     "secretName":  "SqlAdminPassword",
+                                                                                     "type":  "AzureKeyVaultSecret"
+                                                                                 },
+                                                                    "authenticationType":  "Basic"
+                                                                }
+                                         }
+                      },
+                      {
+                          "type":  "Microsoft.DataFactory/factories/datasets",
+                          "apiVersion":  "2018-06-01",
+                          "name":  "[concat(parameters(\u0027factoryName\u0027), \u0027/ds_SkillableSearch\u0027)]",
+                          "dependsOn":  [
+                                            "[variables(\u0027factoryId\u0027)]",
+                                            "[resourceId(\u0027Microsoft.DataFactory/factories/linkedServices\u0027, parameters(\u0027factoryName\u0027), \u0027ls_SkillableAPI\u0027)]"
+                                        ],
+                          "properties":  {
+                                             "type":  "RestResource",
+                                             "linkedServiceName":  {
+                                                                       "referenceName":  "ls_SkillableAPI",
+                                                                       "type":  "LinkedServiceReference"
+                                                                   },
+                                             "typeProperties":  {
+
+                                                                }
+                                         }
+                      },
+                      {
+                          "type":  "Microsoft.DataFactory/factories/datasets",
+                          "apiVersion":  "2018-06-01",
+                          "name":  "[concat(parameters(\u0027factoryName\u0027), \u0027/ds_SqlInstances\u0027)]",
+                          "dependsOn":  [
+                                            "[variables(\u0027factoryId\u0027)]",
+                                            "[resourceId(\u0027Microsoft.DataFactory/factories/linkedServices\u0027, parameters(\u0027factoryName\u0027), \u0027ls_AzureSql\u0027)]"
+                                        ],
+                          "properties":  {
+                                             "type":  "AzureSqlTable",
+                                             "linkedServiceName":  {
+                                                                       "referenceName":  "ls_AzureSql",
+                                                                       "type":  "LinkedServiceReference"
+                                                                   },
+                                             "typeProperties":  {
+                                                                    "tableName":  "dbo.tblInstances"
+                                                                }
+                                         }
+                      },
+                      {
+                          "type":  "Microsoft.DataFactory/factories/pipelines",
+                          "apiVersion":  "2018-06-01",
+                          "name":  "[concat(parameters(\u0027factoryName\u0027), \u0027/pl_SkillableDataIngestion\u0027)]",
+                          "dependsOn":  [
+                                            "[variables(\u0027factoryId\u0027)]",
+                                            "[resourceId(\u0027Microsoft.DataFactory/factories/datasets\u0027, parameters(\u0027factoryName\u0027), \u0027ds_SkillableSearch\u0027)]",
+                                            "[resourceId(\u0027Microsoft.DataFactory/factories/datasets\u0027, parameters(\u0027factoryName\u0027), \u0027ds_SqlInstances\u0027)]",
+                                            "[resourceId(\u0027Microsoft.DataFactory/factories/linkedServices\u0027, parameters(\u0027factoryName\u0027), \u0027ls_AzureSql\u0027)]",
+                                            "[resourceId(\u0027Microsoft.DataFactory/factories/linkedServices\u0027, parameters(\u0027factoryName\u0027), \u0027ls_KeyVault\u0027)]"
+                                        ],
+                          "properties":  {
+                                             "activities":  [
+                                                                {
+                                                                    "name":  "GetApiKey",
+                                                                    "type":  "WebActivity",
+                                                                    "policy":  {
+                                                                                   "timeout":  "0.12:00:00",
+                                                                                   "retry":  0,
+                                                                                   "retryIntervalInSeconds":  30,
+                                                                                   "secureOutput":  false,
+                                                                                   "secureInput":  false
+                                                                               },
+                                                                    "typeProperties":  {
+                                                                                           "method":  "GET",
+                                                                                           "url":  "https://kv-skillable-dashboard.vault.azure.net/secrets/SkillableApiKey?api-version=7.0",
+                                                                                           "authentication":  {
+                                                                                                                  "type":  "MSI",
+                                                                                                                  "resource":  "https://vault.azure.net"
+                                                                                                              }
+                                                                                       }
+                                                                },
+                                                                {
+                                                                    "name":  "SetApiKey",
+                                                                    "type":  "SetVariable",
+                                                                    "dependsOn":  [
+                                                                                      {
+                                                                                          "activity":  "GetApiKey",
+                                                                                          "dependencyConditions":  [
+                                                                                                                       "Succeeded"
+                                                                                                                   ]
+                                                                                      }
+                                                                                  ],
+                                                                    "policy":  {
+                                                                                   "secureInput":  false,
+                                                                                   "secureOutput":  true
+                                                                               },
+                                                                    "typeProperties":  {
+                                                                                           "variableName":  "ApiKeyVar",
+                                                                                           "value":  {
+                                                                                                         "value":  "@activity(\u0027GetApiKey\u0027).output.value",
+                                                                                                         "type":  "Expression"
+                                                                                                     }
+                                                                                       }
+                                                                },
+                                                                {
+                                                                    "name":  "GetFirstPageAndCount",
+                                                                    "type":  "WebActivity",
+                                                                    "dependsOn":  [
+                                                                                      {
+                                                                                          "activity":  "SetApiKey",
+                                                                                          "dependencyConditions":  [
+                                                                                                                       "Succeeded"
+                                                                                                                   ]
+                                                                                      }
+                                                                                  ],
+                                                                    "policy":  {
+                                                                                   "timeout":  "0.12:00:00",
+                                                                                   "retry":  2,
+                                                                                   "retryIntervalInSeconds":  60,
+                                                                                   "secureOutput":  false,
+                                                                                   "secureInput":  false
+                                                                               },
+                                                                    "typeProperties":  {
+                                                                                           "method":  "GET",
+                                                                                           "headers":  {
+                                                                                                           "api_key":  {
+                                                                                                                           "value":  "@variables(\u0027ApiKeyVar\u0027)",
+                                                                                                                           "type":  "Expression"
+                                                                                                                       },
+                                                                                                           "User-Agent":  "AzureDataFactory/1.0"
+                                                                                                       },
+                                                                                           "url":  {
+                                                                                                       "value":  "@concat(\u0027https://labondemand.com/api/v3/labinstance/search?start=\u0027, string(pipeline().parameters.StartEpoch), \u0027\u0026end=\u0027, string(pipeline().parameters.EndEpoch), \u0027\u0026pageIndex=0\u0026pageSize=\u0027, string(pipeline().parameters.PageSize), \u0027\u0026sort=start%20desc\u0026mode=10\u0027)",
+                                                                                                       "type":  "Expression"
+                                                                                                   },
+                                                                                           "httpRequestTimeout":  "00:05:00"
+                                                                                       }
+                                                                },
+                                                                {
+                                                                    "name":  "SetTotalPages",
+                                                                    "type":  "SetVariable",
+                                                                    "dependsOn":  [
+                                                                                      {
+                                                                                          "activity":  "GetFirstPageAndCount",
+                                                                                          "dependencyConditions":  [
+                                                                                                                       "Succeeded"
+                                                                                                                   ]
+                                                                                      }
+                                                                                  ],
+                                                                    "typeProperties":  {
+                                                                                           "variableName":  "TotalPages",
+                                                                                           "value":  {
+                                                                                                         "value":  "@add(div(activity(\u0027GetFirstPageAndCount\u0027).output.TotalResults, pipeline().parameters.PageSize), if(equals(mod(activity(\u0027GetFirstPageAndCount\u0027).output.TotalResults, pipeline().parameters.PageSize), 0), 0, 1))",
+                                                                                                         "type":  "Expression"
+                                                                                                     }
+                                                                                       }
+                                                                },
+                                                                {
+                                                                    "name":  "BuildPageArray",
+                                                                    "type":  "SetVariable",
+                                                                    "dependsOn":  [
+                                                                                      {
+                                                                                          "activity":  "SetTotalPages",
+                                                                                          "dependencyConditions":  [
+                                                                                                                       "Succeeded"
+                                                                                                                   ]
+                                                                                      }
+                                                                                  ],
+                                                                    "typeProperties":  {
+                                                                                           "variableName":  "PageArray",
+                                                                                           "value":  {
+                                                                                                         "value":  "@range(0, variables(\u0027TotalPages\u0027))",
+                                                                                                         "type":  "Expression"
+                                                                                                     }
+                                                                                       }
+                                                                },
+                                                                {
+                                                                    "name":  "ForEachPage",
+                                                                    "type":  "ForEach",
+                                                                    "dependsOn":  [
+                                                                                      {
+                                                                                          "activity":  "BuildPageArray",
+                                                                                          "dependencyConditions":  [
+                                                                                                                       "Succeeded"
+                                                                                                                   ]
+                                                                                      }
+                                                                                  ],
+                                                                    "typeProperties":  {
+                                                                                           "items":  {
+                                                                                                         "value":  "@variables(\u0027PageArray\u0027)",
+                                                                                                         "type":  "Expression"
+                                                                                                     },
+                                                                                           "isSequential":  true,
+                                                                                           "activities":  [
+                                                                                                              {
+                                                                                                                  "name":  "CopySearchResultsToSql",
+                                                                                                                  "type":  "Copy",
+                                                                                                                  "typeProperties":  {
+                                                                                                                                         "source":  {
+                                                                                                                                                        "type":  "RestSource",
+                                                                                                                                                        "httpRequestTimeout":  "00:02:00",
+                                                                                                                                                        "requestInterval":  "00.00:00:01.000",
+                                                                                                                                                        "additionalHeaders":  {
+
+                                                                                                                                                                              },
+                                                                                                                                                        "requestBody":  "",
+                                                                                                                                                        "requestMethod":  "GET"
+                                                                                                                                                    },
+                                                                                                                                         "sink":  {
+                                                                                                                                                      "type":  "AzureSqlSink",
+                                                                                                                                                      "sqlWriterStoredProcedureName":  "dbo.usp_UpsertInstance",
+                                                                                                                                                      "sqlWriterTableType":  "dbo.InstanceTableType",
+                                                                                                                                                      "storedProcedureTableTypeParameterName":  "InstanceData"
+                                                                                                                                                  },
+                                                                                                                                         "enableStaging":  false
+                                                                                                                                     },
+                                                                                                                  "inputs":  [
+                                                                                                                                 {
+                                                                                                                                     "referenceName":  "ds_SkillableSearch",
+                                                                                                                                     "type":  "DatasetReference",
+                                                                                                                                     "parameters":  {
+                                                                                                                                                        "relativeUrl":  {
+                                                                                                                                                                            "value":  "@concat(\u0027labinstance/search?start=\u0027, string(pipeline().parameters.StartEpoch), \u0027\u0026end=\u0027, string(pipeline().parameters.EndEpoch), \u0027\u0026pageIndex=\u0027, string(item()), \u0027\u0026pageSize=\u0027, string(pipeline().parameters.PageSize), \u0027\u0026sort=start%20desc\u0026mode=10\u0027)",
+                                                                                                                                                                            "type":  "Expression"
+                                                                                                                                                                        }
+                                                                                                                                                    }
+                                                                                                                                 }
+                                                                                                                             ],
+                                                                                                                  "outputs":  [
+                                                                                                                                  {
+                                                                                                                                      "referenceName":  "ds_SqlInstances",
+                                                                                                                                      "type":  "DatasetReference"
+                                                                                                                                  }
+                                                                                                                              ]
+                                                                                                              }
+                                                                                                          ]
+                                                                                       }
+                                                                },
+                                                                {
+                                                                    "name":  "UpdateGeoBuckets",
+                                                                    "type":  "SqlServerStoredProcedure",
+                                                                    "dependsOn":  [
+                                                                                      {
+                                                                                          "activity":  "ForEachPage",
+                                                                                          "dependencyConditions":  [
+                                                                                                                       "Succeeded"
+                                                                                                                   ]
+                                                                                      }
+                                                                                  ],
+                                                                    "typeProperties":  {
+                                                                                           "storedProcedureName":  "dbo.usp_UpdateGeoBuckets",
+                                                                                           "storedProcedureParameters":  {
+                                                                                                                             "WindowStartEpoch":  {
+                                                                                                                                                      "value":  {
+                                                                                                                                                                    "value":  "@pipeline().parameters.StartEpoch",
+                                                                                                                                                                    "type":  "Expression"
+                                                                                                                                                                },
+                                                                                                                                                      "type":  "Int64"
+                                                                                                                                                  },
+                                                                                                                             "WindowEndEpoch":  {
+                                                                                                                                                    "value":  {
+                                                                                                                                                                  "value":  "@pipeline().parameters.EndEpoch",
+                                                                                                                                                                  "type":  "Expression"
+                                                                                                                                                              },
+                                                                                                                                                    "type":  "Int64"
+                                                                                                                                                }
+                                                                                                                         }
+                                                                                       },
+                                                                    "linkedServiceName":  {
+                                                                                              "referenceName":  "ls_AzureSql",
+                                                                                              "type":  "LinkedServiceReference"
+                                                                                          }
+                                                                }
+                                                            ],
+                                             "parameters":  {
+                                                                "StartEpoch":  {
+                                                                                   "type":  "int"
+                                                                               },
+                                                                "EndEpoch":  {
+                                                                                 "type":  "int"
+                                                                             },
+                                                                "PageSize":  {
+                                                                                 "type":  "int",
+                                                                                 "defaultValue":  10
+                                                                             }
+                                                            },
+                                             "variables":  {
+                                                               "ApiKeyVar":  {
+                                                                                 "type":  "String",
+                                                                                 "defaultValue":  ""
+                                                                             },
+                                                               "TotalPages":  {
+                                                                                  "type":  "Integer",
+                                                                                  "defaultValue":  0
+                                                                              },
+                                                               "PageArray":  {
+                                                                                 "type":  "Array",
+                                                                                 "defaultValue":  [
+
+                                                                                                  ]
+                                                                             }
+                                                           }
+                                         }
+                      },
+                      {
+                          "type":  "Microsoft.DataFactory/factories/triggers",
+                          "apiVersion":  "2018-06-01",
+                          "name":  "[concat(parameters(\u0027factoryName\u0027), \u0027/tr_Every6Hours\u0027)]",
+                          "dependsOn":  [
+                                            "[variables(\u0027factoryId\u0027)]",
+                                            "[resourceId(\u0027Microsoft.DataFactory/factories/pipelines\u0027, parameters(\u0027factoryName\u0027), \u0027pl_SkillableDataIngestion\u0027)]"
+                                        ],
+                          "properties":  {
+                                             "type":  "TumblingWindowTrigger",
+                                             "typeProperties":  {
+                                                                    "frequency":  "Hour",
+                                                                    "interval":  6,
+                                                                    "startTime":  "2026-06-01T05:00:00Z",
+                                                                    "delay":  "00:00:00",
+                                                                    "maxConcurrency":  1,
+                                                                    "retryPolicy":  {
+                                                                                        "count":  3,
+                                                                                        "intervalInSeconds":  300
+                                                                                    }
+                                                                },
+                                             "pipeline":  {
+                                                              "pipelineReference":  {
+                                                                                        "type":  "PipelineReference",
+                                                                                        "referenceName":  "pl_SkillableDataIngestion"
+                                                                                    },
+                                                              "parameters":  {
+                                                                                 "StartEpoch":  "@div(sub(ticks(trigger().outputs.windowStartTime), ticks(\u00271970-01-01T00:00:00Z\u0027)), 10000000)",
+                                                                                 "EndEpoch":  "@div(sub(ticks(trigger().outputs.windowEndTime), ticks(\u00271970-01-01T00:00:00Z\u0027)), 10000000)",
+                                                                                 "PageSize":  10
+                                                                             }
+                                                          }
+                                         }
+                      },
+                      {
+                          "type":  "Microsoft.DataFactory/factories/pipelines",
+                          "apiVersion":  "2018-06-01",
+                          "name":  "[concat(parameters(\u0027factoryName\u0027), \u0027/pl_WeeklyDataPurge\u0027)]",
+                          "dependsOn":  [
+                                            "[variables(\u0027factoryId\u0027)]",
+                                            "[resourceId(\u0027Microsoft.DataFactory/factories/linkedServices\u0027, parameters(\u0027factoryName\u0027), \u0027ls_AzureSql\u0027)]"
+                                        ],
+                          "properties":  {
+                                             "activities":  [
+                                                                {
+                                                                    "name":  "CleanupOldData",
+                                                                    "type":  "SqlServerStoredProcedure",
+                                                                    "typeProperties":  {
+                                                                                           "storedProcedureName":  "dbo.usp_CleanupOldData",
+                                                                                           "storedProcedureParameters":  {
+                                                                                                                             "RetentionDays":  {
+                                                                                                                                                   "value":  "7",
+                                                                                                                                                   "type":  "Int32"
+                                                                                                                                               }
+                                                                                                                         }
+                                                                                       },
+                                                                    "linkedServiceName":  {
+                                                                                              "referenceName":  "ls_AzureSql",
+                                                                                              "type":  "LinkedServiceReference"
+                                                                                          }
+                                                                }
+                                                            ]
+                                         }
+                      },
+                      {
+                          "type":  "Microsoft.DataFactory/factories/triggers",
+                          "apiVersion":  "2018-06-01",
+                          "name":  "[concat(parameters(\u0027factoryName\u0027), \u0027/tr_WeeklyPurge\u0027)]",
+                          "dependsOn":  [
+                                            "[variables(\u0027factoryId\u0027)]",
+                                            "[resourceId(\u0027Microsoft.DataFactory/factories/pipelines\u0027, parameters(\u0027factoryName\u0027), \u0027pl_WeeklyDataPurge\u0027)]"
+                                        ],
+                          "properties":  {
+                                             "type":  "ScheduleTrigger",
+                                             "typeProperties":  {
+                                                                    "recurrence":  {
+                                                                                       "frequency":  "Week",
+                                                                                       "interval":  1,
+                                                                                       "startTime":  "2026-06-05T05:00:00Z",
+                                                                                       "timeZone":  "UTC",
+                                                                                       "schedule":  {
+                                                                                                        "hours":  [
+                                                                                                                      5
+                                                                                                                  ],
+                                                                                                        "minutes":  [
+                                                                                                                        0
+                                                                                                                    ],
+                                                                                                        "weekDays":  [
+                                                                                                                         "Friday"
+                                                                                                                     ]
+                                                                                                    }
+                                                                                   }
+                                                                },
+                                             "pipelines":  [
+                                                               {
+                                                                   "pipelineReference":  {
+                                                                                             "type":  "PipelineReference",
+                                                                                             "referenceName":  "pl_WeeklyDataPurge"
+                                                                                         }
+                                                               }
+                                                           ]
+                                         }
                       }
-                    }
-                  ],
-                  "outputs": [
-                    {
-                      "referenceName": "ds_SqlInstances",
-                      "type": "DatasetReference"
-                    }
                   ]
-                }
-              ]
-            }
-          },
-          {
-            "name": "UpdateGeoBuckets",
-            "type": "SqlServerStoredProcedure",
-            "dependsOn": [
-              {
-                "activity": "ForEachPage",
-                "dependencyConditions": [
-                  "Succeeded"
-                ]
-              }
-            ],
-            "typeProperties": {
-              "storedProcedureName": "dbo.usp_UpdateGeoBuckets",
-              "storedProcedureParameters": {
-                "WindowStartEpoch": {
-                  "value": {
-                    "value": "@pipeline().parameters.StartEpoch",
-                    "type": "Expression"
-                  },
-                  "type": "Int64"
-                },
-                "WindowEndEpoch": {
-                  "value": {
-                    "value": "@pipeline().parameters.EndEpoch",
-                    "type": "Expression"
-                  },
-                  "type": "Int64"
-                }
-              }
-            },
-            "linkedServiceName": {
-              "referenceName": "ls_AzureSql",
-              "type": "LinkedServiceReference"
-            }
-          }
-        ],
-        "parameters": {
-          "StartEpoch": {
-            "type": "int"
-          },
-          "EndEpoch": {
-            "type": "int"
-          },
-          "PageSize": {
-            "type": "int",
-            "defaultValue": 10
-          }
-        },
-        "variables": {
-          "ApiKeyVar": {
-            "type": "String",
-            "defaultValue": ""
-          },
-          "TotalPages": {
-            "type": "Integer",
-            "defaultValue": 0
-          },
-          "PageArray": {
-            "type": "Array",
-            "defaultValue": []
-          }
-        }
-      }
-    },
-    {
-      "type": "Microsoft.DataFactory/factories/triggers",
-      "apiVersion": "2018-06-01",
-      "name": "[concat(parameters('factoryName'), '/tr_Every6Hours')]",
-      "dependsOn": [
-        "[variables('factoryId')]",
-        "[resourceId('Microsoft.DataFactory/factories/pipelines', parameters('factoryName'), 'pl_SkillableDataIngestion')]"
-      ],
-      "properties": {
-        "type": "TumblingWindowTrigger",
-        "typeProperties": {
-          "frequency": "Hour",
-          "interval": 6,
-          "startTime": "2026-06-01T05:00:00Z",
-          "delay": "00:00:00",
-          "maxConcurrency": 1,
-          "retryPolicy": {
-            "count": 3,
-            "intervalInSeconds": 300
-          }
-        },
-        "pipeline": {
-          "pipelineReference": {
-            "type": "PipelineReference",
-            "referenceName": "pl_SkillableDataIngestion"
-          },
-          "parameters": {
-            "StartEpoch": "@div(sub(ticks(trigger().outputs.windowStartTime), ticks('1970-01-01T00:00:00Z')), 10000000)",
-            "EndEpoch": "@div(sub(ticks(trigger().outputs.windowEndTime), ticks('1970-01-01T00:00:00Z')), 10000000)",
-            "PageSize": 10
-          }
-        }
-      }
-    },
-    {
-      "type": "Microsoft.DataFactory/factories/pipelines",
-      "apiVersion": "2018-06-01",
-      "name": "[concat(parameters('factoryName'), '/pl_WeeklyDataPurge')]",
-      "dependsOn": [
-        "[variables('factoryId')]",
-        "[resourceId('Microsoft.DataFactory/factories/linkedServices', parameters('factoryName'), 'ls_AzureSql')]"
-      ],
-      "properties": {
-        "activities": [
-          {
-            "name": "CleanupOldData",
-            "type": "SqlServerStoredProcedure",
-            "typeProperties": {
-              "storedProcedureName": "dbo.usp_CleanupOldData",
-              "storedProcedureParameters": {
-                "RetentionDays": {
-                  "value": "7",
-                  "type": "Int32"
-                }
-              }
-            },
-            "linkedServiceName": {
-              "referenceName": "ls_AzureSql",
-              "type": "LinkedServiceReference"
-            }
-          }
-        ]
-      }
-    },
-    {
-      "type": "Microsoft.DataFactory/factories/triggers",
-      "apiVersion": "2018-06-01",
-      "name": "[concat(parameters('factoryName'), '/tr_WeeklyPurge')]",
-      "dependsOn": [
-        "[variables('factoryId')]",
-        "[resourceId('Microsoft.DataFactory/factories/pipelines', parameters('factoryName'), 'pl_WeeklyDataPurge')]"
-      ],
-      "properties": {
-        "type": "ScheduleTrigger",
-        "typeProperties": {
-          "recurrence": {
-            "frequency": "Week",
-            "interval": 1,
-            "startTime": "2026-06-05T05:00:00Z",
-            "timeZone": "UTC",
-            "schedule": {
-              "hours": [
-                5
-              ],
-              "minutes": [
-                0
-              ],
-              "weekDays": [
-                "Friday"
-              ]
-            }
-          }
-        },
-        "pipelines": [
-          {
-            "pipelineReference": {
-              "type": "PipelineReference",
-              "referenceName": "pl_WeeklyDataPurge"
-            }
-          }
-        ]
-      }
-    }
-  ]
 }
