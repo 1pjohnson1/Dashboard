@@ -1,10 +1,64 @@
 {
     "activities": [
         {
+            "name": "GetApiKey",
+            "description": "Retrieve Skillable API key from Key Vault",
+            "type": "WebActivity",
+            "dependsOn": [],
+            "policy": {
+                "timeout": "0.12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+            },
+            "userProperties": [],
+            "typeProperties": {
+                "method": "GET",
+                "url": "https://kv-skillable-dashboard.vault.azure.net/secrets/SkillableApiKey?api-version=7.0",
+                "authentication": {
+                    "type": "MSI",
+                    "resource": "https://vault.azure.net"
+                }
+            }
+        },
+        {
+            "name": "SetApiKey",
+            "description": "Store the API key in a variable",
+            "type": "SetVariable",
+            "dependsOn": [
+                {
+                    "activity": "GetApiKey",
+                    "dependencyConditions": [
+                        "Succeeded"
+                    ]
+                }
+            ],
+            "policy": {
+                "secureOutput": true,
+                "secureInput": false
+            },
+            "userProperties": [],
+            "typeProperties": {
+                "variableName": "ApiKeyVar",
+                "value": {
+                    "value": "@activity('GetApiKey').output.value",
+                    "type": "Expression"
+                }
+            }
+        },
+        {
             "name": "GetFirstPageAndCount",
             "description": "Activity 1-Web Activity: GetFirstPageAndCount",
             "type": "WebActivity",
-            "dependsOn": [],
+            "dependsOn": [
+                {
+                    "activity": "SetApiKey",
+                    "dependencyConditions": [
+                        "Succeeded"
+                    ]
+                }
+            ],
             "policy": {
                 "timeout": "0.12:00:00",
                 "retry": 1,
@@ -15,14 +69,14 @@
             "userProperties": [],
             "typeProperties": {
                 "method": "GET",
-                            "headers": {
-                                "api_key": {
-                                    "value": "@pipeline().parameters.SkillableApiKey",
-                                    "type": "Expression"
-                                }
-                            },
+                "headers": {
+                    "api_key": {
+                        "value": "@variables('ApiKeyVar')",
+                        "type": "Expression"
+                    }
+                },
                 "url": {
-                                "value": "@concat('https://labondemand.com/api/v3/labinstance/search?start=', string(pipeline().parameters.StartEpoch), '&end=', string(pipeline().parameters.EndEpoch), '&pageIndex=0&pageSize=', string(pipeline().parameters.PageSize), '&sort=start%20desc&mode=10')",
+                    "value": "@concat('https://labondemand.com/api/v3/labinstance/search?start=', string(pipeline().parameters.StartEpoch), '&end=', string(pipeline().parameters.EndEpoch), '&pageIndex=0&pageSize=', string(pipeline().parameters.PageSize), '&sort=start%20desc&mode=10')",
                     "type": "Expression"
                 }
             }
@@ -30,7 +84,14 @@
         {
             "name": "SetTotalPages",
             "type": "SetVariable",
-            "dependsOn": [],
+            "dependsOn": [
+                {
+                    "activity": "GetFirstPageAndCount",
+                    "dependencyConditions": [
+                        "Succeeded"
+                    ]
+                }
+            ],
             "policy": {
                 "secureOutput": false,
                 "secureInput": false
@@ -44,7 +105,14 @@
         {
             "name": "BuildPageArray",
             "type": "SetVariable",
-            "dependsOn": [],
+            "dependsOn": [
+                {
+                    "activity": "SetTotalPages",
+                    "dependencyConditions": [
+                        "Succeeded"
+                    ]
+                }
+            ],
             "policy": {
                 "secureOutput": false,
                 "secureInput": false
@@ -52,16 +120,20 @@
             "userProperties": [],
             "typeProperties": {
                 "variableName": "PageArray",
-                "value": [
-                    "@range(0",
-                    " variables('TotalPages'))"
-                ]
+                "value": "@range(0, variables('TotalPages'))"
             }
         },
         {
             "name": "ForEachPage",
             "type": "ForEach",
-            "dependsOn": [],
+            "dependsOn": [
+                {
+                    "activity": "BuildPageArray",
+                    "dependencyConditions": [
+                        "Succeeded"
+                    ]
+                }
+            ],
             "userProperties": [],
             "typeProperties": {
                 "items": {
@@ -115,7 +187,12 @@
                             {
                                 "referenceName": "ds_SkillableSearch",
                                 "type": "DatasetReference",
-                                "parameters": {}
+                                "parameters": {
+                                    "relativeUrl": {
+                                        "value": "@concat('labinstance/search?start=', string(pipeline().parameters.StartEpoch), '&end=', string(pipeline().parameters.EndEpoch), '&pageIndex=', string(item()), '&pageSize=', string(pipeline().parameters.PageSize), '&sort=start%20desc&mode=10')",
+                                        "type": "Expression"
+                                    }
+                                }
                             }
                         ],
                         "outputs": [
@@ -143,12 +220,13 @@
         "PageSize": {
             "type": "int",
             "defaultValue": 10
-        },
-        "SkillableApiKey": {
-            "type": "string"
         }
     },
     "variables": {
+        "ApiKeyVar": {
+            "type": "String",
+            "defaultValue": ""
+        },
         "TotalResults": {
             "type": "Integer",
             "defaultValue": 0
