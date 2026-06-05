@@ -7,7 +7,7 @@
             "dependsOn": [],
             "policy": {
                 "timeout": "0.12:00:00",
-                "retry": 0,
+                "retry": 1,
                 "retryIntervalInSeconds": 30,
                 "secureOutput": false,
                 "secureInput": false
@@ -15,9 +15,14 @@
             "userProperties": [],
             "typeProperties": {
                 "method": "GET",
-                "headers": {},
+                            "headers": {
+                                "api_key": {
+                                    "value": "@pipeline().parameters.SkillableApiKey",
+                                    "type": "Expression"
+                                }
+                            },
                 "url": {
-                    "value": "@concat('https://labondemand.com/api/v3/labinstance/search?start=', string(pipeline().parameters.StartEpoch), '&end=', string(pipeline().parameters.EndEpoch), '&pageIndex=0&pageSize=', string(pipeline().parameters.PageSize), '&sort=start%20desc&mode=10')",
+                                "value": "@concat('https://labondemand.com/api/v3/labinstance/search?start=', string(pipeline().parameters.StartEpoch), '&end=', string(pipeline().parameters.EndEpoch), '&pageIndex=0&pageSize=', string(pipeline().parameters.PageSize), '&sort=start%20desc&mode=10')",
                     "type": "Expression"
                 }
             }
@@ -137,7 +142,10 @@
         },
         "PageSize": {
             "type": "int",
-            "defaultValue": 100
+            "defaultValue": 10
+        },
+        "SkillableApiKey": {
+            "type": "string"
         }
     },
     "variables": {

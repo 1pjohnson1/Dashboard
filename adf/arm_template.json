@@ -76,7 +76,17 @@
         "typeProperties": {
           "url": "https://labondemand.com/api/v3/",
           "enableServerCertificateValidation": true,
-          "authenticationType": "Anonymous"
+          "authenticationType": "Anonymous",
+          "authHeaders": {
+            "api_key": {
+              "type": "AzureKeyVaultSecret",
+              "store": {
+                "referenceName": "ls_KeyVault",
+                "type": "LinkedServiceReference"
+              },
+              "secretName": "SkillableApiKey"
+            }
+          }
         }
       }
     },
@@ -145,10 +155,23 @@
           {
             "name": "GetFirstPageAndCount",
             "type": "WebActivity",
+            "policy": {
+              "timeout": "0.12:00:00",
+              "retry": 1,
+              "retryIntervalInSeconds": 30,
+              "secureOutput": false,
+              "secureInput": false
+            },
             "typeProperties": {
               "method": "GET",
+              "headers": {
+                "api_key": {
+                  "value": "@pipeline().parameters.SkillableApiKey",
+                  "type": "Expression"
+                }
+              },
               "url": {
-                "value": "@concat('https://labondemand.com/api/v3/labinstance/search?api_key=', pipeline().parameters.SkillableApiKey, '&start=', string(pipeline().parameters.StartEpoch), '&end=', string(pipeline().parameters.EndEpoch), '&pageIndex=0&pageSize=', string(pipeline().parameters.PageSize), '&sort=start%20desc&mode=10')",
+                "value": "@concat('https://labondemand.com/api/v3/labinstance/search?start=', string(pipeline().parameters.StartEpoch), '&end=', string(pipeline().parameters.EndEpoch), '&pageIndex=0&pageSize=', string(pipeline().parameters.PageSize), '&sort=start%20desc&mode=10')",
                 "type": "Expression"
               }
             }
@@ -235,7 +258,7 @@
                       "type": "DatasetReference",
                       "parameters": {
                         "relativeUrl": {
-                          "value": "@concat('labinstance/search?api_key=', pipeline().parameters.SkillableApiKey, '&start=', string(pipeline().parameters.StartEpoch), '&end=', string(pipeline().parameters.EndEpoch), '&pageIndex=', string(item()), '&pageSize=', string(pipeline().parameters.PageSize), '&sort=start%20desc&mode=10')",
+                          "value": "@concat('labinstance/search?start=', string(pipeline().parameters.StartEpoch), '&end=', string(pipeline().parameters.EndEpoch), '&pageIndex=', string(item()), '&pageSize=', string(pipeline().parameters.PageSize), '&sort=start%20desc&mode=10')",
                           "type": "Expression"
                         }
                       }
@@ -296,7 +319,7 @@
           },
           "PageSize": {
             "type": "int",
-            "defaultValue": 100
+            "defaultValue": 10
           },
           "SkillableApiKey": {
             "type": "string"
@@ -343,7 +366,7 @@
           "parameters": {
             "StartEpoch": "@div(sub(ticks(trigger().outputs.windowStartTime), ticks('1970-01-01T00:00:00Z')), 10000000)",
             "EndEpoch": "@div(sub(ticks(trigger().outputs.windowEndTime), ticks('1970-01-01T00:00:00Z')), 10000000)",
-            "PageSize": 100,
+            "PageSize": 10,
             "SkillableApiKey": "[parameters('skillableApiKey')]"
           }
         }
