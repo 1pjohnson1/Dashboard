@@ -161,6 +161,10 @@
                                 "type": "RestSource",
                                 "httpRequestTimeout": "00:01:40",
                                 "requestInterval": "00.00:00:00.010",
+                                "additionalHeaders": {
+                                    "User-Agent": "AzureDataFactory/1.0",
+                                    "Accept": "application/json"
+                                },
                                 "requestMethod": "GET",
                                 "paginationRules": {
                                     "supportRFC5988": "true"
@@ -191,7 +195,7 @@
                                 "type": "DatasetReference",
                                 "parameters": {
                                     "relativeUrl": {
-                                        "value": "@concat('labinstance/search?start=', string(pipeline().parameters.StartEpoch), '&end=', string(pipeline().parameters.EndEpoch), '&pageIndex=', string(item()), '&pageSize=', string(pipeline().parameters.PageSize), '&sort=start%20desc&mode=10')",
+                                        "value": "@concat('labinstance/search?start=', string(pipeline().parameters.StartEpoch), '&end=', string(pipeline().parameters.EndEpoch), '&pageIndex=', string(item()), '&pageSize=', string(pipeline().parameters.PageSize), '&sort=start%20desc&mode=10&api_key=', uriComponent(variables('ApiKeyVar')))",
                                         "type": "Expression"
                                     }
                                 }

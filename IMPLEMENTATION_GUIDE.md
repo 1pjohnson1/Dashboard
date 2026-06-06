@@ -431,7 +431,9 @@ Name: `pl_SkillableDataIngestion`
 | `StartEpoch` | Int | (none — set by trigger) |
 | `EndEpoch` | Int | (none — set by trigger) |
 | `PageSize` | Int | `100` |
-| `SkillableApiKey` | String | (your API key) |
+
+The pipeline does not take `SkillableApiKey` as a parameter. It retrieves the API
+key at runtime from Azure Key Vault.
 
 #### 4.5.2 Pipeline Variables
 
@@ -449,7 +451,7 @@ Type: **Web**
 | Setting | Value |
 |---------|-------|
 | Method | GET |
-| URL | `@concat('https://labondemand.com/api/v3/labinstance/search?api_key=', pipeline().parameters.SkillableApiKey, '&start=', string(pipeline().parameters.StartEpoch), '&end=', string(pipeline().parameters.EndEpoch), '&pageIndex=0&pageSize=', string(pipeline().parameters.PageSize), '&sort=start%20desc&mode=10')` |
+| URL | `@concat('https://labondemand.com/api/v3/labinstance/search?start=', string(pipeline().parameters.StartEpoch), '&end=', string(pipeline().parameters.EndEpoch), '&pageIndex=0&pageSize=', string(pipeline().parameters.PageSize), '&sort=start%20desc&mode=10')` |
 
 This returns a JSON response with:
 ```json
@@ -506,7 +508,7 @@ Type: **Copy data**
 | Setting | Value |
 |---------|-------|
 | Source dataset | `ds_SkillableSearch` |
-| Relative URL | `@concat('labinstance/search?api_key=', pipeline().parameters.SkillableApiKey, '&start=', string(pipeline().parameters.StartEpoch), '&end=', string(pipeline().parameters.EndEpoch), '&pageIndex=', string(item()), '&pageSize=', string(pipeline().parameters.PageSize), '&sort=start%20desc&mode=10')` |
+| Relative URL | `@concat('labinstance/search?start=', string(pipeline().parameters.StartEpoch), '&end=', string(pipeline().parameters.EndEpoch), '&pageIndex=', string(item()), '&pageSize=', string(pipeline().parameters.PageSize), '&sort=start%20desc&mode=10')` |
 | Request method | GET |
 
 **Sink configuration:**
@@ -619,8 +621,9 @@ az deployment group create \
     sqlServerName=$SQL_SERVER_NAME \
     sqlDatabaseName=$SQL_DB_NAME \
     sqlAdminUser=$SQL_ADMIN_USER \
-    sqlAdminPassword="$SQL_ADMIN_PASS" \
-    skillableApiKey="YOUR_SKILLABLE_API_KEY"
+    keyVaultName=$KEYVAULT_NAME \
+    sqlAdminPasswordSecretName="SqlAdminPassword" \
+    skillableApiKeySecretName="SkillableApiKey"
 ```
 
 ### 4.8 Validate & Test
@@ -630,7 +633,6 @@ az deployment group create \
    - `StartEpoch`: `1780102800` (a recent 6-hour window start)
    - `EndEpoch`: `1780124400`
    - `PageSize`: `10` (small for testing)
-   - `SkillableApiKey`: your key
 3. Monitor the run — each activity should show green ✅
 4. Verify data in SQL:
    ```sql

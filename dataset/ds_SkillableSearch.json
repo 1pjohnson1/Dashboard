@@ -4,9 +4,17 @@
         "type": "LinkedServiceReference"
     },
     "annotations": [],
+    "parameters": {
+        "relativeUrl": {
+            "type": "String"
+        }
+    },
     "type": "RestResource",
     "typeProperties": {
-        "relativeUrl": ""
+        "relativeUrl": {
+            "value": "@dataset().relativeUrl",
+            "type": "Expression"
+        }
     },
     "schema": []
 }

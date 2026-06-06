@@ -29,6 +29,13 @@
                                                                 "description":  "SQL Database name"
                                                             }
                                            },
+                       "keyVaultName":  {
+                                            "type":  "string",
+                                            "defaultValue":  "kv-skillable-dashboard",
+                                            "metadata":  {
+                                                             "description":  "Azure Key Vault name containing ADF secrets"
+                                                         }
+                                        },
                        "sqlAdminUser":  {
                                             "type":  "string",
                                             "defaultValue":  "sqladmin",
@@ -36,16 +43,23 @@
                                                              "description":  "SQL admin username"
                                                          }
                                         },
-                       "sqlAdminPassword":  {
-                                                "type":  "securestring",
+                       "sqlAdminPasswordSecretName":  {
+                                                "type":  "string",
+                                                "defaultValue":  "SqlAdminPassword",
                                                 "metadata":  {
-                                                                 "description":  "SQL admin password"
+                                                                 "description":  "Key Vault secret name for SQL admin password"
+                                                             }
+                                            },
+                       "skillableApiKeySecretName":  {
+                                                "type":  "string",
+                                                "defaultValue":  "SkillableApiKey",
+                                                "metadata":  {
+                                                                 "description":  "Key Vault secret name for Skillable API key"
                                                              }
                                             }
                    },
     "variables":  {
-                      "factoryId":  "[resourceId(\u0027Microsoft.DataFactory/factories\u0027, parameters(\u0027factoryName\u0027))]",
-                      "sqlConnectionString":  "[concat(\u0027Server=tcp:\u0027, parameters(\u0027sqlServerName\u0027), \u0027.database.windows.net,1433;Database=\u0027, parameters(\u0027sqlDatabaseName\u0027), \u0027;User ID=\u0027, parameters(\u0027sqlAdminUser\u0027), \u0027;Password=\u0027, parameters(\u0027sqlAdminPassword\u0027), \u0027;Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;\u0027)]"
+                      "factoryId":  "[resourceId(\u0027Microsoft.DataFactory/factories\u0027, parameters(\u0027factoryName\u0027))]"
                   },
     "resources":  [
                       {
@@ -70,7 +84,7 @@
                           "properties":  {
                                              "type":  "AzureKeyVault",
                                              "typeProperties":  {
-                                                                    "baseUrl":  "https://kv-skillable-dashboard.vault.azure.net/"
+                                                                    "baseUrl":  "[concat(\u0027https://\u0027, parameters(\u0027keyVaultName\u0027), \u0027.vault.azure.net/\u0027)]"
                                                                 }
                                          }
                       },
@@ -95,7 +109,7 @@
                                                                                                                       "referenceName":  "ls_KeyVault",
                                                                                                                       "type":  "LinkedServiceReference"
                                                                                                                   },
-                                                                                                        "secretName":  "SkillableApiKey"
+                                                                                                        "secretName":  "[parameters(\u0027skillableApiKeySecretName\u0027)]"
                                                                                                     }
                                                                                     }
                                                                 }
@@ -111,13 +125,13 @@
                           "properties":  {
                                              "type":  "AzureSqlDatabase",
                                              "typeProperties":  {
-                                                                    "connectionString":  "Data Source=sql-skillable-1f54a9ce.database.windows.net;Initial Catalog=SkillableLabTelemetry;User ID=sqladmin;Encrypt=True;TrustServerCertificate=False",
+                                                                    "connectionString":  "[concat(\u0027Data Source=\u0027, parameters(\u0027sqlServerName\u0027), \u0027;Initial Catalog=\u0027, parameters(\u0027sqlDatabaseName\u0027), \u0027;User ID=\u0027, parameters(\u0027sqlAdminUser\u0027), \u0027;Encrypt=True;TrustServerCertificate=False\u0027)]",
                                                                     "password":  {
                                                                                      "store":  {
                                                                                                    "referenceName":  "ls_KeyVault",
                                                                                                    "type":  "LinkedServiceReference"
                                                                                                },
-                                                                                     "secretName":  "SqlAdminPassword",
+                                                                                     "secretName":  "[parameters(\u0027sqlAdminPasswordSecretName\u0027)]",
                                                                                      "type":  "AzureKeyVaultSecret"
                                                                                  },
                                                                     "authenticationType":  "Basic"
@@ -138,8 +152,16 @@
                                                                        "referenceName":  "ls_SkillableAPI",
                                                                        "type":  "LinkedServiceReference"
                                                                    },
+                                             "parameters":  {
+                                                                "relativeUrl":  {
+                                                                                    "type":  "String"
+                                                                                }
+                                                            },
                                              "typeProperties":  {
-
+                                                                    "relativeUrl":  {
+                                                                                        "value":  "@dataset().relativeUrl",
+                                                                                        "type":  "Expression"
+                                                                                    }
                                                                 }
                                          }
                       },
@@ -187,7 +209,7 @@
                                                                                },
                                                                     "typeProperties":  {
                                                                                            "method":  "GET",
-                                                                                           "url":  "https://kv-skillable-dashboard.vault.azure.net/secrets/SkillableApiKey?api-version=7.0",
+                                                                                           "url":  "[concat(\u0027https://\u0027, parameters(\u0027keyVaultName\u0027), \u0027.vault.azure.net/secrets/\u0027, parameters(\u0027skillableApiKeySecretName\u0027), \u0027?api-version=7.0\u0027)]",
                                                                                            "authentication":  {
                                                                                                                   "type":  "MSI",
                                                                                                                   "resource":  "https://vault.azure.net"
@@ -317,8 +339,9 @@
                                                                                                                                                         "requestInterval":  "00.00:00:01.000",
                                                                                                                                                         "additionalHeaders":  {
 
+                                                                                                              "User-Agent":  "AzureDataFactory/1.0",
+                                                                                                              "Accept":  "application/json"
                                                                                                                                                                               },
-                                                                                                                                                        "requestBody":  "",
                                                                                                                                                         "requestMethod":  "GET"
                                                                                                                                                     },
                                                                                                                                          "sink":  {
@@ -335,7 +358,7 @@
                                                                                                                                      "type":  "DatasetReference",
                                                                                                                                      "parameters":  {
                                                                                                                                                         "relativeUrl":  {
-                                                                                                                                                                            "value":  "@concat(\u0027labinstance/search?start=\u0027, string(pipeline().parameters.StartEpoch), \u0027\u0026end=\u0027, string(pipeline().parameters.EndEpoch), \u0027\u0026pageIndex=\u0027, string(item()), \u0027\u0026pageSize=\u0027, string(pipeline().parameters.PageSize), \u0027\u0026sort=start%20desc\u0026mode=10\u0027)",
+                                                                                                                                                                            "value":  "@concat(\u0027labinstance/search?start=\u0027, string(pipeline().parameters.StartEpoch), \u0027\u0026end=\u0027, string(pipeline().parameters.EndEpoch), \u0027\u0026pageIndex=\u0027, string(item()), \u0027\u0026pageSize=\u0027, string(pipeline().parameters.PageSize), \u0027\u0026sort=start%20desc\u0026mode=10\u0026api_key=\u0027, uriComponent(variables(\u0027ApiKeyVar\u0027)))",
                                                                                                                                                                             "type":  "Expression"
                                                                                                                                                                         }
                                                                                                                                                     }

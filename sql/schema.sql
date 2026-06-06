@@ -194,6 +194,61 @@ CREATE NONCLUSTERED INDEX IX_tblGeoBuckets_IngestTimestamp
 GO
 
 -- =============================================================================
+-- TABLE-VALUED PARAMETER TYPES
+-- =============================================================================
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- TYPE: InstanceTableType
+-- Table-valued parameter type consumed by usp_UpsertInstance.
+-- Referenced by ADF Copy Activity sink (sqlWriterTableType = dbo.InstanceTableType,
+-- storedProcedureTableTypeParameterName = InstanceData).
+-- Excludes computed columns (StartDateTime, EndDateTime) and server-default
+-- column (IngestTimestamp) — those are derived or set by the proc/server.
+-- ─────────────────────────────────────────────────────────────────────────────
+IF TYPE_ID(N'dbo.InstanceTableType') IS NULL
+    EXEC (N'
+    CREATE TYPE dbo.InstanceTableType AS TABLE (
+        InstanceId          INT             NOT NULL,
+        LabProfileId        INT             NOT NULL,
+        LabProfileName      NVARCHAR(500)   NOT NULL,
+        SeriesId            INT             NULL,
+        SeriesName          NVARCHAR(255)   NULL,
+        UserId              NVARCHAR(100)   NULL,
+        UserFirstName       NVARCHAR(100)   NULL,
+        UserLastName        NVARCHAR(100)   NULL,
+        ClassId             INT             NULL,
+        StartEpoch          BIGINT          NOT NULL,
+        EndEpoch            BIGINT          NULL,
+        LastActivityEpoch   BIGINT          NULL,
+        ExpirationEpoch     BIGINT          NULL,
+        State               NVARCHAR(50)    NOT NULL,
+        CompletionStatus    NVARCHAR(50)    NULL,
+        IpAddress           NVARCHAR(50)    NULL,
+        Country             NVARCHAR(100)   NULL,
+        Region              NVARCHAR(100)   NULL,
+        City                NVARCHAR(100)   NULL,
+        Latitude            FLOAT           NULL,
+        Longitude           FLOAT           NULL,
+        DatacenterId        INT             NULL,
+        DatacenterName      NVARCHAR(255)   NULL,
+        LabHostId           INT             NULL,
+        LabHostName         NVARCHAR(255)   NULL,
+        DeliveryRegionName  NVARCHAR(255)   NULL,
+        LastLatency         INT             NULL,
+        ErrorCount          INT             NOT NULL,
+        StartupDuration     INT             NULL,
+        TotalRunTime        INT             NULL,
+        TimeInSession       INT             NULL,
+        TaskCompletePercent FLOAT           NULL,
+        ExamPassed          BIT             NULL,
+        ExamScore           FLOAT           NULL,
+        IsExam              BIT             NULL,
+        PlatformId          INT             NULL,
+        ApiConsumer         NVARCHAR(255)   NULL
+    )');
+GO
+
+-- =============================================================================
 -- VIEWS
 -- =============================================================================
 

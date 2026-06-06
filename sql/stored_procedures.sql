@@ -9,88 +9,52 @@
 -- Called by ADF Copy Activity sink. Uses MERGE to insert or update.
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE OR ALTER PROCEDURE dbo.usp_UpsertInstance
-    @InstanceId         INT,
-    @LabProfileId       INT,
-    @LabProfileName     NVARCHAR(500),
-    @SeriesId           INT             = NULL,
-    @SeriesName         NVARCHAR(255)   = NULL,
-    @UserId             NVARCHAR(100)   = NULL,
-    @UserFirstName      NVARCHAR(100)   = NULL,
-    @UserLastName       NVARCHAR(100)   = NULL,
-    @ClassId            INT             = NULL,
-    @StartEpoch         BIGINT,
-    @EndEpoch           BIGINT          = NULL,
-    @LastActivityEpoch  BIGINT          = NULL,
-    @ExpirationEpoch    BIGINT          = NULL,
-    @State              NVARCHAR(50),
-    @CompletionStatus   NVARCHAR(50)    = NULL,
-    @IpAddress          NVARCHAR(50)    = NULL,
-    @Country            NVARCHAR(100)   = NULL,
-    @Region             NVARCHAR(100)   = NULL,
-    @City               NVARCHAR(100)   = NULL,
-    @Latitude           FLOAT           = NULL,
-    @Longitude          FLOAT           = NULL,
-    @DatacenterId       INT             = NULL,
-    @DatacenterName     NVARCHAR(255)   = NULL,
-    @LabHostId          INT             = NULL,
-    @LabHostName        NVARCHAR(255)   = NULL,
-    @DeliveryRegionName NVARCHAR(255)   = NULL,
-    @LastLatency        INT             = NULL,
-    @ErrorCount         INT             = 0,
-    @StartupDuration    INT             = NULL,
-    @TotalRunTime       INT             = NULL,
-    @TimeInSession      INT             = NULL,
-    @TaskCompletePercent FLOAT          = NULL,
-    @ExamPassed         BIT             = NULL,
-    @ExamScore          FLOAT           = NULL,
-    @IsExam             BIT             = NULL,
-    @PlatformId         INT             = NULL,
-    @ApiConsumer        NVARCHAR(255)   = NULL
+    @InstanceData dbo.InstanceTableType READONLY
 AS
 BEGIN
     SET NOCOUNT ON;
 
     MERGE dbo.tblInstances AS target
-    USING (SELECT @InstanceId AS InstanceId) AS source
+    USING @InstanceData AS source
     ON target.InstanceId = source.InstanceId
     WHEN MATCHED THEN
         UPDATE SET
-            LabProfileId        = @LabProfileId,
-            LabProfileName      = @LabProfileName,
-            SeriesId            = @SeriesId,
-            SeriesName          = @SeriesName,
-            UserId              = @UserId,
-            UserFirstName       = @UserFirstName,
-            UserLastName        = @UserLastName,
-            ClassId             = @ClassId,
-            StartEpoch          = @StartEpoch,
-            EndEpoch            = @EndEpoch,
-            LastActivityEpoch   = @LastActivityEpoch,
-            ExpirationEpoch     = @ExpirationEpoch,
-            State               = @State,
-            CompletionStatus    = @CompletionStatus,
-            IpAddress           = @IpAddress,
-            Country             = @Country,
-            Region              = @Region,
-            City                = @City,
-            Latitude            = @Latitude,
-            Longitude           = @Longitude,
-            DatacenterId        = @DatacenterId,
-            DatacenterName      = @DatacenterName,
-            LabHostId           = @LabHostId,
-            LabHostName         = @LabHostName,
-            DeliveryRegionName  = @DeliveryRegionName,
-            LastLatency         = @LastLatency,
-            ErrorCount          = @ErrorCount,
-            StartupDuration     = @StartupDuration,
-            TotalRunTime        = @TotalRunTime,
-            TimeInSession       = @TimeInSession,
-            TaskCompletePercent = @TaskCompletePercent,
-            ExamPassed          = @ExamPassed,
-            ExamScore           = @ExamScore,
-            IsExam              = @IsExam,
-            PlatformId          = @PlatformId,
-            ApiConsumer         = @ApiConsumer,
+            LabProfileId        = source.LabProfileId,
+            LabProfileName      = source.LabProfileName,
+            SeriesId            = source.SeriesId,
+            SeriesName          = source.SeriesName,
+            UserId              = source.UserId,
+            UserFirstName       = source.UserFirstName,
+            UserLastName        = source.UserLastName,
+            ClassId             = source.ClassId,
+            StartEpoch          = source.StartEpoch,
+            EndEpoch            = source.EndEpoch,
+            LastActivityEpoch   = source.LastActivityEpoch,
+            ExpirationEpoch     = source.ExpirationEpoch,
+            State               = source.State,
+            CompletionStatus    = source.CompletionStatus,
+            IpAddress           = source.IpAddress,
+            Country             = source.Country,
+            Region              = source.Region,
+            City                = source.City,
+            Latitude            = source.Latitude,
+            Longitude           = source.Longitude,
+            DatacenterId        = source.DatacenterId,
+            DatacenterName      = source.DatacenterName,
+            LabHostId           = source.LabHostId,
+            LabHostName         = source.LabHostName,
+            DeliveryRegionName  = source.DeliveryRegionName,
+            LastLatency         = source.LastLatency,
+            ErrorCount          = source.ErrorCount,
+            StartupDuration     = source.StartupDuration,
+            TotalRunTime        = source.TotalRunTime,
+            TimeInSession       = source.TimeInSession,
+            TaskCompletePercent = source.TaskCompletePercent,
+            ExamPassed          = source.ExamPassed,
+            ExamScore           = source.ExamScore,
+            IsExam              = source.IsExam,
+            PlatformId          = source.PlatformId,
+            ApiConsumer         = source.ApiConsumer,
             IngestTimestamp     = SYSUTCDATETIME()
     WHEN NOT MATCHED THEN
         INSERT (
@@ -104,17 +68,17 @@ BEGIN
             TimeInSession, TaskCompletePercent, ExamPassed, ExamScore,
             IsExam, PlatformId, ApiConsumer
         )
-        VALUES (
-            @InstanceId, @LabProfileId, @LabProfileName, @SeriesId, @SeriesName,
-            @UserId, @UserFirstName, @UserLastName, @ClassId,
-            @StartEpoch, @EndEpoch, @LastActivityEpoch, @ExpirationEpoch,
-            @State, @CompletionStatus, @IpAddress, @Country, @Region, @City,
-            @Latitude, @Longitude, @DatacenterId, @DatacenterName,
-            @LabHostId, @LabHostName, @DeliveryRegionName,
-            @LastLatency, @ErrorCount, @StartupDuration, @TotalRunTime,
-            @TimeInSession, @TaskCompletePercent, @ExamPassed, @ExamScore,
-            @IsExam, @PlatformId, @ApiConsumer
-        );
+        SELECT
+            InstanceId, LabProfileId, LabProfileName, SeriesId, SeriesName,
+            UserId, UserFirstName, UserLastName, ClassId,
+            StartEpoch, EndEpoch, LastActivityEpoch, ExpirationEpoch,
+            State, CompletionStatus, IpAddress, Country, Region, City,
+            Latitude, Longitude, DatacenterId, DatacenterName,
+            LabHostId, LabHostName, DeliveryRegionName,
+            LastLatency, ErrorCount, StartupDuration, TotalRunTime,
+            TimeInSession, TaskCompletePercent, ExamPassed, ExamScore,
+            IsExam, PlatformId, ApiConsumer
+        FROM source;
 END;
 GO
 
