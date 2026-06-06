@@ -15,7 +15,7 @@ BEGIN
     SET NOCOUNT ON;
 
     MERGE dbo.tblInstances AS target
-    USING @InstanceData AS source
+    USING (SELECT * FROM @InstanceData) AS source
     ON target.InstanceId = source.InstanceId
     WHEN MATCHED THEN
         UPDATE SET
@@ -26,6 +26,7 @@ BEGIN
             UserId              = source.UserId,
             UserFirstName       = source.UserFirstName,
             UserLastName        = source.UserLastName,
+            UserEmail           = source.UserEmail,
             ClassId             = source.ClassId,
             StartEpoch          = source.StartEpoch,
             EndEpoch            = source.EndEpoch,
@@ -59,7 +60,7 @@ BEGIN
     WHEN NOT MATCHED THEN
         INSERT (
             InstanceId, LabProfileId, LabProfileName, SeriesId, SeriesName,
-            UserId, UserFirstName, UserLastName, ClassId,
+            UserId, UserFirstName, UserLastName, UserEmail, ClassId,
             StartEpoch, EndEpoch, LastActivityEpoch, ExpirationEpoch,
             State, CompletionStatus, IpAddress, Country, Region, City,
             Latitude, Longitude, DatacenterId, DatacenterName,
@@ -68,17 +69,17 @@ BEGIN
             TimeInSession, TaskCompletePercent, ExamPassed, ExamScore,
             IsExam, PlatformId, ApiConsumer
         )
-        SELECT
-            InstanceId, LabProfileId, LabProfileName, SeriesId, SeriesName,
-            UserId, UserFirstName, UserLastName, ClassId,
-            StartEpoch, EndEpoch, LastActivityEpoch, ExpirationEpoch,
-            State, CompletionStatus, IpAddress, Country, Region, City,
-            Latitude, Longitude, DatacenterId, DatacenterName,
-            LabHostId, LabHostName, DeliveryRegionName,
-            LastLatency, ErrorCount, StartupDuration, TotalRunTime,
-            TimeInSession, TaskCompletePercent, ExamPassed, ExamScore,
-            IsExam, PlatformId, ApiConsumer
-        FROM source;
+        VALUES (
+            source.InstanceId, source.LabProfileId, source.LabProfileName, source.SeriesId, source.SeriesName,
+            source.UserId, source.UserFirstName, source.UserLastName, source.UserEmail, source.ClassId,
+            source.StartEpoch, source.EndEpoch, source.LastActivityEpoch, source.ExpirationEpoch,
+            source.State, source.CompletionStatus, source.IpAddress, source.Country, source.Region, source.City,
+            source.Latitude, source.Longitude, source.DatacenterId, source.DatacenterName,
+            source.LabHostId, source.LabHostName, source.DeliveryRegionName,
+            source.LastLatency, source.ErrorCount, source.StartupDuration, source.TotalRunTime,
+            source.TimeInSession, source.TaskCompletePercent, source.ExamPassed, source.ExamScore,
+            source.IsExam, source.PlatformId, source.ApiConsumer
+        );
 END;
 GO
 
