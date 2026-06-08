@@ -125,16 +125,8 @@
                           "properties":  {
                                              "type":  "AzureSqlDatabase",
                                              "typeProperties":  {
-                                                                    "connectionString":  "[concat(\u0027Data Source=\u0027, parameters(\u0027sqlServerName\u0027), \u0027;Initial Catalog=\u0027, parameters(\u0027sqlDatabaseName\u0027), \u0027;User ID=\u0027, parameters(\u0027sqlAdminUser\u0027), \u0027;Encrypt=True;TrustServerCertificate=False\u0027)]",
-                                                                    "password":  {
-                                                                                     "store":  {
-                                                                                                   "referenceName":  "ls_KeyVault",
-                                                                                                   "type":  "LinkedServiceReference"
-                                                                                               },
-                                                                                     "secretName":  "[parameters(\u0027sqlAdminPasswordSecretName\u0027)]",
-                                                                                     "type":  "AzureKeyVaultSecret"
-                                                                                 },
-                                                                    "authenticationType":  "Basic"
+                                                                    "connectionString":  "[concat('Data Source=', parameters('sqlServerName'), ';Initial Catalog=', parameters('sqlDatabaseName'), ';Encrypt=True;TrustServerCertificate=False')]",
+                                                                    "authenticationType":  "ManagedServiceIdentity"
                                                                 }
                                          }
                       },
@@ -162,7 +154,161 @@
                                                                                         "value":  "@dataset().relativeUrl",
                                                                                         "type":  "Expression"
                                                                                     }
-                                                                }
+                                                                },
+                                             "schema":  [
+                                                            {
+                                                                "name":  "Id",
+                                                                "type":  "Int64"
+                                                            },
+                                                            {
+                                                                "name":  "LabProfileId",
+                                                                "type":  "Int64"
+                                                            },
+                                                            {
+                                                                "name":  "LabProfileName",
+                                                                "type":  "String"
+                                                            },
+                                                            {
+                                                                "name":  "SeriesId",
+                                                                "type":  "Int64"
+                                                            },
+                                                            {
+                                                                "name":  "SeriesName",
+                                                                "type":  "String"
+                                                            },
+                                                            {
+                                                                "name":  "UserId",
+                                                                "type":  "String"
+                                                            },
+                                                            {
+                                                                "name":  "UserFirstName",
+                                                                "type":  "String"
+                                                            },
+                                                            {
+                                                                "name":  "UserLastName",
+                                                                "type":  "String"
+                                                            },
+                                                            {
+                                                                "name":  "UserEmail",
+                                                                "type":  "String"
+                                                            },
+                                                            {
+                                                                "name":  "ClassId",
+                                                                "type":  "Int64"
+                                                            },
+                                                            {
+                                                                "name":  "StartEpoch",
+                                                                "type":  "Int64"
+                                                            },
+                                                            {
+                                                                "name":  "EndEpoch",
+                                                                "type":  "Int64"
+                                                            },
+                                                            {
+                                                                "name":  "LastActivityEpoch",
+                                                                "type":  "Int64"
+                                                            },
+                                                            {
+                                                                "name":  "ExpirationEpoch",
+                                                                "type":  "Int64"
+                                                            },
+                                                            {
+                                                                "name":  "State",
+                                                                "type":  "String"
+                                                            },
+                                                            {
+                                                                "name":  "CompletionStatus",
+                                                                "type":  "String"
+                                                            },
+                                                            {
+                                                                "name":  "IpAddress",
+                                                                "type":  "String"
+                                                            },
+                                                            {
+                                                                "name":  "Country",
+                                                                "type":  "String"
+                                                            },
+                                                            {
+                                                                "name":  "Region",
+                                                                "type":  "String"
+                                                            },
+                                                            {
+                                                                "name":  "City",
+                                                                "type":  "String"
+                                                            },
+                                                            {
+                                                                "name":  "Latitude",
+                                                                "type":  "Double"
+                                                            },
+                                                            {
+                                                                "name":  "Longitude",
+                                                                "type":  "Double"
+                                                            },
+                                                            {
+                                                                "name":  "DatacenterId",
+                                                                "type":  "Int64"
+                                                            },
+                                                            {
+                                                                "name":  "DatacenterName",
+                                                                "type":  "String"
+                                                            },
+                                                            {
+                                                                "name":  "LabHostId",
+                                                                "type":  "Int64"
+                                                            },
+                                                            {
+                                                                "name":  "LabHostName",
+                                                                "type":  "String"
+                                                            },
+                                                            {
+                                                                "name":  "DeliveryRegionName",
+                                                                "type":  "String"
+                                                            },
+                                                            {
+                                                                "name":  "LastLatency",
+                                                                "type":  "Int64"
+                                                            },
+                                                            {
+                                                                "name":  "ErrorCount",
+                                                                "type":  "Int64"
+                                                            },
+                                                            {
+                                                                "name":  "StartupDuration",
+                                                                "type":  "Int64"
+                                                            },
+                                                            {
+                                                                "name":  "TotalRunTime",
+                                                                "type":  "Int64"
+                                                            },
+                                                            {
+                                                                "name":  "TimeInSession",
+                                                                "type":  "Int64"
+                                                            },
+                                                            {
+                                                                "name":  "TaskCompletePercent",
+                                                                "type":  "Double"
+                                                            },
+                                                            {
+                                                                "name":  "ExamPassed",
+                                                                "type":  "Boolean"
+                                                            },
+                                                            {
+                                                                "name":  "ExamScore",
+                                                                "type":  "Double"
+                                                            },
+                                                            {
+                                                                "name":  "IsExam",
+                                                                "type":  "Boolean"
+                                                            },
+                                                            {
+                                                                "name":  "PlatformId",
+                                                                "type":  "Int64"
+                                                            },
+                                                            {
+                                                                "name":  "ApiConsumer",
+                                                                "type":  "String"
+                                                            }
+                                                        ]
                                          }
                       },
                       {
@@ -181,7 +327,47 @@
                                                                    },
                                              "typeProperties":  {
                                                                     "tableName":  "dbo.tblInstances"
-                                                                }
+                                                                },
+                                             "schema":  [
+                                                            { "name": "InstanceId", "type": "Int64" },
+                                                            { "name": "LabProfileId", "type": "Int64" },
+                                                            { "name": "LabProfileName", "type": "String" },
+                                                            { "name": "SeriesId", "type": "Int64" },
+                                                            { "name": "SeriesName", "type": "String" },
+                                                            { "name": "UserId", "type": "String" },
+                                                            { "name": "UserFirstName", "type": "String" },
+                                                            { "name": "UserLastName", "type": "String" },
+                                                            { "name": "UserEmail", "type": "String" },
+                                                            { "name": "ClassId", "type": "Int64" },
+                                                            { "name": "StartEpoch", "type": "Int64" },
+                                                            { "name": "EndEpoch", "type": "Int64" },
+                                                            { "name": "LastActivityEpoch", "type": "Int64" },
+                                                            { "name": "ExpirationEpoch", "type": "Int64" },
+                                                            { "name": "State", "type": "String" },
+                                                            { "name": "CompletionStatus", "type": "String" },
+                                                            { "name": "IpAddress", "type": "String" },
+                                                            { "name": "Country", "type": "String" },
+                                                            { "name": "Region", "type": "String" },
+                                                            { "name": "City", "type": "String" },
+                                                            { "name": "Latitude", "type": "Double" },
+                                                            { "name": "Longitude", "type": "Double" },
+                                                            { "name": "DatacenterId", "type": "Int64" },
+                                                            { "name": "DatacenterName", "type": "String" },
+                                                            { "name": "LabHostId", "type": "Int64" },
+                                                            { "name": "LabHostName", "type": "String" },
+                                                            { "name": "DeliveryRegionName", "type": "String" },
+                                                            { "name": "LastLatency", "type": "Int64" },
+                                                            { "name": "ErrorCount", "type": "Int64" },
+                                                            { "name": "StartupDuration", "type": "Int64" },
+                                                            { "name": "TotalRunTime", "type": "Int64" },
+                                                            { "name": "TimeInSession", "type": "Int64" },
+                                                            { "name": "TaskCompletePercent", "type": "Double" },
+                                                            { "name": "ExamPassed", "type": "Boolean" },
+                                                            { "name": "ExamScore", "type": "Double" },
+                                                            { "name": "IsExam", "type": "Boolean" },
+                                                            { "name": "PlatformId", "type": "Int64" },
+                                                            { "name": "ApiConsumer", "type": "String" }
+                                                        ]
                                          }
                       },
                       {
@@ -354,45 +540,46 @@
                                                                                                                                          "translator":  {
                                                                                                                                              "type":  "TabularTranslator",
                                                                                                                                              "mapComplexValuesToString":  false,
+                                                                                                                                             "collectionReference":  "$['Results']",
                                                                                                                                              "mappings":  [
-                                                                                                                                                 {  "source":  {  "name":  "id"  },  "sink":  {  "name":  "InstanceId"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "labProfileId"  },  "sink":  {  "name":  "LabProfileId"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "labProfileName"  },  "sink":  {  "name":  "LabProfileName"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "seriesId"  },  "sink":  {  "name":  "SeriesId"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "seriesName"  },  "sink":  {  "name":  "SeriesName"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "userId"  },  "sink":  {  "name":  "UserId"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "userFirstName"  },  "sink":  {  "name":  "UserFirstName"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "userLastName"  },  "sink":  {  "name":  "UserLastName"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "userEmail"  },  "sink":  {  "name":  "UserEmail"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "classId"  },  "sink":  {  "name":  "ClassId"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "startEpoch"  },  "sink":  {  "name":  "StartEpoch"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "endEpoch"  },  "sink":  {  "name":  "EndEpoch"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "lastActivityEpoch"  },  "sink":  {  "name":  "LastActivityEpoch"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "expirationEpoch"  },  "sink":  {  "name":  "ExpirationEpoch"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "state"  },  "sink":  {  "name":  "State"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "completionStatus"  },  "sink":  {  "name":  "CompletionStatus"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "ipAddress"  },  "sink":  {  "name":  "IpAddress"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "country"  },  "sink":  {  "name":  "Country"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "region"  },  "sink":  {  "name":  "Region"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "city"  },  "sink":  {  "name":  "City"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "latitude"  },  "sink":  {  "name":  "Latitude"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "longitude"  },  "sink":  {  "name":  "Longitude"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "datacenterId"  },  "sink":  {  "name":  "DatacenterId"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "datacenterName"  },  "sink":  {  "name":  "DatacenterName"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "labHostId"  },  "sink":  {  "name":  "LabHostId"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "labHostName"  },  "sink":  {  "name":  "LabHostName"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "deliveryRegionName"  },  "sink":  {  "name":  "DeliveryRegionName"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "lastLatency"  },  "sink":  {  "name":  "LastLatency"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "errorCount"  },  "sink":  {  "name":  "ErrorCount"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "startupDuration"  },  "sink":  {  "name":  "StartupDuration"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "totalRunTime"  },  "sink":  {  "name":  "TotalRunTime"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "timeInSession"  },  "sink":  {  "name":  "TimeInSession"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "taskCompletePercent"  },  "sink":  {  "name":  "TaskCompletePercent"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "examPassed"  },  "sink":  {  "name":  "ExamPassed"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "examScore"  },  "sink":  {  "name":  "ExamScore"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "isExam"  },  "sink":  {  "name":  "IsExam"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "platformId"  },  "sink":  {  "name":  "PlatformId"  }  },
-                                                                                                                                                 {  "source":  {  "name":  "apiConsumer"  },  "sink":  {  "name":  "ApiConsumer"  }  }
+                                                                                                                                                 {  "source":  {  "name":  "Id",  "type":  "Int64"  },  "sink":  {  "name":  "InstanceId",  "type":  "Int64"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "LabProfileId",  "type":  "Int64"  },  "sink":  {  "name":  "LabProfileId",  "type":  "Int64"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "LabProfileName",  "type":  "String"  },  "sink":  {  "name":  "LabProfileName",  "type":  "String"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "SeriesId",  "type":  "Int64"  },  "sink":  {  "name":  "SeriesId",  "type":  "Int64"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "SeriesName",  "type":  "String"  },  "sink":  {  "name":  "SeriesName",  "type":  "String"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "UserId",  "type":  "String"  },  "sink":  {  "name":  "UserId",  "type":  "String"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "UserFirstName",  "type":  "String"  },  "sink":  {  "name":  "UserFirstName",  "type":  "String"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "UserLastName",  "type":  "String"  },  "sink":  {  "name":  "UserLastName",  "type":  "String"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "UserEmail",  "type":  "String"  },  "sink":  {  "name":  "UserEmail",  "type":  "String"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "ClassId",  "type":  "Int64"  },  "sink":  {  "name":  "ClassId",  "type":  "Int64"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "StartEpoch",  "type":  "Int64"  },  "sink":  {  "name":  "StartEpoch",  "type":  "Int64"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "EndEpoch",  "type":  "Int64"  },  "sink":  {  "name":  "EndEpoch",  "type":  "Int64"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "LastActivityEpoch",  "type":  "Int64"  },  "sink":  {  "name":  "LastActivityEpoch",  "type":  "Int64"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "ExpirationEpoch",  "type":  "Int64"  },  "sink":  {  "name":  "ExpirationEpoch",  "type":  "Int64"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "State",  "type":  "String"  },  "sink":  {  "name":  "State",  "type":  "String"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "CompletionStatus",  "type":  "String"  },  "sink":  {  "name":  "CompletionStatus",  "type":  "String"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "IpAddress",  "type":  "String"  },  "sink":  {  "name":  "IpAddress",  "type":  "String"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "Country",  "type":  "String"  },  "sink":  {  "name":  "Country",  "type":  "String"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "Region",  "type":  "String"  },  "sink":  {  "name":  "Region",  "type":  "String"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "City",  "type":  "String"  },  "sink":  {  "name":  "City",  "type":  "String"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "Latitude",  "type":  "Double"  },  "sink":  {  "name":  "Latitude",  "type":  "Double"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "Longitude",  "type":  "Double"  },  "sink":  {  "name":  "Longitude",  "type":  "Double"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "DatacenterId",  "type":  "Int64"  },  "sink":  {  "name":  "DatacenterId",  "type":  "Int64"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "DatacenterName",  "type":  "String"  },  "sink":  {  "name":  "DatacenterName",  "type":  "String"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "LabHostId",  "type":  "Int64"  },  "sink":  {  "name":  "LabHostId",  "type":  "Int64"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "LabHostName",  "type":  "String"  },  "sink":  {  "name":  "LabHostName",  "type":  "String"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "DeliveryRegionName",  "type":  "String"  },  "sink":  {  "name":  "DeliveryRegionName",  "type":  "String"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "LastLatency",  "type":  "Int64"  },  "sink":  {  "name":  "LastLatency",  "type":  "Int64"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "ErrorCount",  "type":  "Int64"  },  "sink":  {  "name":  "ErrorCount",  "type":  "Int64"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "StartupDuration",  "type":  "Int64"  },  "sink":  {  "name":  "StartupDuration",  "type":  "Int64"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "TotalRunTime",  "type":  "Int64"  },  "sink":  {  "name":  "TotalRunTime",  "type":  "Int64"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "TimeInSession",  "type":  "Int64"  },  "sink":  {  "name":  "TimeInSession",  "type":  "Int64"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "TaskCompletePercent",  "type":  "Double"  },  "sink":  {  "name":  "TaskCompletePercent",  "type":  "Double"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "ExamPassed",  "type":  "Boolean"  },  "sink":  {  "name":  "ExamPassed",  "type":  "Boolean"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "ExamScore",  "type":  "Double"  },  "sink":  {  "name":  "ExamScore",  "type":  "Double"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "IsExam",  "type":  "Boolean"  },  "sink":  {  "name":  "IsExam",  "type":  "Boolean"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "PlatformId",  "type":  "Int64"  },  "sink":  {  "name":  "PlatformId",  "type":  "Int64"  }  },
+                                                                                                                                                 {  "source":  {  "name":  "ApiConsumer",  "type":  "String"  },  "sink":  {  "name":  "ApiConsumer",  "type":  "String"  }  }
                                                                                                                                              ]
                                                                                                                                          }
                                                                                                                                      },

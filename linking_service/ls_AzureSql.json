@@ -1,15 +1,7 @@
 ﻿{
     "type": "AzureSqlDatabase",
     "typeProperties": {
-        "connectionString": "Data Source=sql-skillable-1f54a9ce.database.windows.net;Initial Catalog=SkillableLabTelemetry;User ID=sqladmin;Encrypt=True;TrustServerCertificate=False",
-        "password": {
-            "type": "AzureKeyVaultSecret",
-            "store": {
-                "referenceName": "ls_KeyVault",
-                "type": "LinkedServiceReference"
-            },
-            "secretName": "SqlAdminPassword"
-        },
-        "authenticationType": "Basic"
+        "connectionString": "Data Source=sql-skillable-1f54a9ce.database.windows.net;Initial Catalog=SkillableLabTelemetry;Encrypt=True;TrustServerCertificate=False",
+        "authenticationType": "ManagedServiceIdentity"
     }
 }

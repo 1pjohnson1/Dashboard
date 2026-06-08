@@ -15,7 +15,50 @@ BEGIN
     SET NOCOUNT ON;
 
     MERGE dbo.tblInstances AS target
-    USING (SELECT * FROM @InstanceData) AS source
+    USING (
+        SELECT
+            InstanceId,
+            LabProfileId,
+            LabProfileName,
+            SeriesId,
+            SeriesName,
+            UserId,
+            UserFirstName,
+            UserLastName,
+            UserEmail,
+            ClassId,
+            StartEpoch,
+            EndEpoch,
+            LastActivityEpoch,
+            ExpirationEpoch,
+            ISNULL(State, 'Unknown')            AS State,
+            CompletionStatus,
+            IpAddress,
+            Country,
+            Region,
+            City,
+            Latitude,
+            Longitude,
+            DatacenterId,
+            DatacenterName,
+            LabHostId,
+            LabHostName,
+            DeliveryRegionName,
+            LastLatency,
+            ISNULL(ErrorCount, 0)               AS ErrorCount,
+            StartupDuration,
+            TotalRunTime,
+            TimeInSession,
+            TaskCompletePercent,
+            ExamPassed,
+            ExamScore,
+            IsExam,
+            PlatformId,
+            ApiConsumer
+        FROM @InstanceData
+        WHERE InstanceId IS NOT NULL
+          AND StartEpoch IS NOT NULL
+    ) AS source
     ON target.InstanceId = source.InstanceId
     WHEN MATCHED THEN
         UPDATE SET

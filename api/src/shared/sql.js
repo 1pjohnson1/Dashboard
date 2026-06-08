@@ -1,96 +1,92 @@
 const { Connection, Request, TYPES } = require('tedious');
+const { SecretClient } = require('@azure/keyvault-secrets');
+const { DefaultAzureCredential } = require('@azure/identity');
 
-/**
- * Execute a SQL query and return results as an array of objects.
- */
-function executeQuery(query, parameters = []) {
-        return new Promise((resolve, reject) => {
-                    const cs = process.env.SQL_CONNECTION_STRING || '';
+let _cachedPassword = null;
 
-                                   // Parse connection string fields
-                                   const serverMatch = cs.match(/Server=tcp:([^,;]+)/i);
-                    const dbMatch = cs.match(/(?:Initial Catalog|Database)=([^;]+)/i);
-                    const userMatch = cs.match(/User ID=([^;]+)/i);
-                    const pwdMatch = cs.match(/Password=([^;]+)/i);
+async function getSqlPassword() {
+    if (_cachedPassword !== null) return _cachedPassword;
 
-                                   const server = serverMatch ? serverMatch[1] : (process.env.SQL_SERVER || 'sql-skillable-1f54a9ce.database.windows.net');
-                    const database = dbMatch ? dbMatch[1] : (process.env.SQL_DATABASE || 'SkillableLabTelemetry');
+    const kvUrl = process.env.KEY_VAULT_URL;
+    if (kvUrl) {
+        const client = new SecretClient(kvUrl, new DefaultAzureCredential());
+        const secret = await client.getSecret('SqlAdminPassword');
+        _cachedPassword = secret.value;
+        return _cachedPassword;
+    }
 
-                                   let config;
-                    if (userMatch && pwdMatch) {
-                                    // Use SQL Server login when credentials are in the connection string
-                        config = {
-                                            server,
-                                            authentication: {
-                                                                    type: 'default',
-                                                                    options: {
-                                                                                                userName: userMatch[1],
-                                                                                                password: pwdMatch[1],
-                                                                    },
-                                            },
-                                            options: {
-                                                                    database,
-                                                                    encrypt: true,
-                                                                    port: 1433,
-                                                                    connectTimeout: 30000,
-                                                                    requestTimeout: 30000,
-                                                                    trustServerCertificate: false,
-                                            },
-                        };
-                    } else {
-                                    // Fall back to Managed Identity (requires Standard plan or linked Function App)
-                        config = {
-                                            server,
-                                            authentication: {
-                                                                    type: 'azure-active-directory-msi-app-service',
-                                            },
-                                            options: {
-                                                                    database,
-                                                                    encrypt: true,
-                                                                    port: 1433,
-                                                                    connectTimeout: 30000,
-                                                                    requestTimeout: 30000,
-                                            },
-                        };
-                    }
+    // Local dev fallback: read password from SQL_CONNECTION_STRING
+    const cs = process.env.SQL_CONNECTION_STRING || '';
+    const match = cs.match(/Password=([^;]+)/i);
+    return match ? match[1] : null;
+}
 
-                                   const connection = new Connection(config);
-                    const rows = [];
+async function executeQuery(query, parameters = []) {
+    const server   = process.env.SQL_SERVER   || 'sql-skillable-1f54a9ce.database.windows.net';
+    const database = process.env.SQL_DATABASE || 'SkillableLabTelemetry';
+    const user     = process.env.SQL_ADMIN_USER || 'sqladmin';
+    const password = await getSqlPassword();
 
-                                   connection.on('connect', (err) => {
-                                                   if (err) {
-                                                                       reject(err);
-                                                                       return;
-                                                   }
+    const config = password
+        ? {
+            server,
+            authentication: {
+                type: 'default',
+                options: { userName: user, password },
+            },
+            options: {
+                database,
+                encrypt: true,
+                port: 1433,
+                connectTimeout: 30000,
+                requestTimeout: 30000,
+                trustServerCertificate: false,
+            },
+        }
+        : {
+            // Fallback to Managed Identity when no password is available
+            server,
+            authentication: {
+                type: 'azure-active-directory-msi-app-service',
+            },
+            options: {
+                database,
+                encrypt: true,
+                port: 1433,
+                connectTimeout: 30000,
+                requestTimeout: 30000,
+            },
+        };
 
-                                                             const request = new Request(query, (err, rowCount) => {
-                                                                                 connection.close();
-                                                                                 if (err) {
-                                                                                                         reject(err);
-                                                                                     } else {
-                                                                                                         resolve(rows);
-                                                                                     }
-                                                             });
+    return new Promise((resolve, reject) => {
+        const connection = new Connection(config);
+        const rows = [];
 
-                                                             // Add parameters
-                                                             parameters.forEach((p) => {
-                                                                                 request.addParameter(p.name, p.type, p.value);
-                                                             });
+        connection.on('connect', (err) => {
+            if (err) {
+                reject(err);
+                return;
+            }
 
-                                                             // Collect rows
-                                                             request.on('row', (columns) => {
-                                                                                 const row = {};
-                                                                                 columns.forEach((col) => {
-                                                                                                         row[col.metadata.colName] = col.value;
-                                                                                     });
-                                                                                 rows.push(row);
-                                                             });
+            const request = new Request(query, (err) => {
+                connection.close();
+                if (err) reject(err);
+                else resolve(rows);
+            });
 
-                                                             connection.execSql(request);
-                                   });
+            parameters.forEach((p) => request.addParameter(p.name, p.type, p.value));
 
-                                   connection.connect();
+            request.on('row', (columns) => {
+                const row = {};
+                columns.forEach((col) => { row[col.metadata.colName] = col.value; });
+                rows.push(row);
+            });
+
+            connection.execSql(request);
         });
+
+        connection.connect();
+    });
 }
 
 module.exports = { executeQuery, TYPES };

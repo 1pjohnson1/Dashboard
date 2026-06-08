@@ -150,8 +150,8 @@
                         "dependsOn": [],
                         "policy": {
                             "timeout": "0.12:00:00",
-                            "retry": 0,
-                            "retryIntervalInSeconds": 30,
+                            "retry": 4,
+                            "retryIntervalInSeconds": 90,
                             "secureOutput": false,
                             "secureInput": false
                         },
@@ -159,7 +159,7 @@
                         "typeProperties": {
                             "source": {
                                 "type": "RestSource",
-                                "httpRequestTimeout": "00:01:40",
+                                "httpRequestTimeout": "00:05:00",
                                 "requestInterval": "00.00:00:00.010",
                                 "additionalHeaders": {
                                     "User-Agent": "AzureDataFactory/1.0",
@@ -176,7 +176,7 @@
                                 "upsertSettings": {
                                     "useTempDB": true,
                                     "keys": {
-                                        "value": "@createArray('Id')\n",
+                                        "value": "@createArray('InstanceId')",
                                         "type": "Expression"
                                     }
                                 },
@@ -187,45 +187,46 @@
                             "translator": {
                                 "type": "TabularTranslator",
                                 "mapComplexValuesToString": false,
+                                "collectionReference": "$['Results']",
                                 "mappings": [
-                                    { "source": { "name": "id" }, "sink": { "name": "InstanceId" } },
-                                    { "source": { "name": "labProfileId" }, "sink": { "name": "LabProfileId" } },
-                                    { "source": { "name": "labProfileName" }, "sink": { "name": "LabProfileName" } },
-                                    { "source": { "name": "seriesId" }, "sink": { "name": "SeriesId" } },
-                                    { "source": { "name": "seriesName" }, "sink": { "name": "SeriesName" } },
-                                    { "source": { "name": "userId" }, "sink": { "name": "UserId" } },
-                                    { "source": { "name": "userFirstName" }, "sink": { "name": "UserFirstName" } },
-                                    { "source": { "name": "userLastName" }, "sink": { "name": "UserLastName" } },
-                                    { "source": { "name": "userEmail" }, "sink": { "name": "UserEmail" } },
-                                    { "source": { "name": "classId" }, "sink": { "name": "ClassId" } },
-                                    { "source": { "name": "startEpoch" }, "sink": { "name": "StartEpoch" } },
-                                    { "source": { "name": "endEpoch" }, "sink": { "name": "EndEpoch" } },
-                                    { "source": { "name": "lastActivityEpoch" }, "sink": { "name": "LastActivityEpoch" } },
-                                    { "source": { "name": "expirationEpoch" }, "sink": { "name": "ExpirationEpoch" } },
-                                    { "source": { "name": "state" }, "sink": { "name": "State" } },
-                                    { "source": { "name": "completionStatus" }, "sink": { "name": "CompletionStatus" } },
-                                    { "source": { "name": "ipAddress" }, "sink": { "name": "IpAddress" } },
-                                    { "source": { "name": "country" }, "sink": { "name": "Country" } },
-                                    { "source": { "name": "region" }, "sink": { "name": "Region" } },
-                                    { "source": { "name": "city" }, "sink": { "name": "City" } },
-                                    { "source": { "name": "latitude" }, "sink": { "name": "Latitude" } },
-                                    { "source": { "name": "longitude" }, "sink": { "name": "Longitude" } },
-                                    { "source": { "name": "datacenterId" }, "sink": { "name": "DatacenterId" } },
-                                    { "source": { "name": "datacenterName" }, "sink": { "name": "DatacenterName" } },
-                                    { "source": { "name": "labHostId" }, "sink": { "name": "LabHostId" } },
-                                    { "source": { "name": "labHostName" }, "sink": { "name": "LabHostName" } },
-                                    { "source": { "name": "deliveryRegionName" }, "sink": { "name": "DeliveryRegionName" } },
-                                    { "source": { "name": "lastLatency" }, "sink": { "name": "LastLatency" } },
-                                    { "source": { "name": "errorCount" }, "sink": { "name": "ErrorCount" } },
-                                    { "source": { "name": "startupDuration" }, "sink": { "name": "StartupDuration" } },
-                                    { "source": { "name": "totalRunTime" }, "sink": { "name": "TotalRunTime" } },
-                                    { "source": { "name": "timeInSession" }, "sink": { "name": "TimeInSession" } },
-                                    { "source": { "name": "taskCompletePercent" }, "sink": { "name": "TaskCompletePercent" } },
-                                    { "source": { "name": "examPassed" }, "sink": { "name": "ExamPassed" } },
-                                    { "source": { "name": "examScore" }, "sink": { "name": "ExamScore" } },
-                                    { "source": { "name": "isExam" }, "sink": { "name": "IsExam" } },
-                                    { "source": { "name": "platformId" }, "sink": { "name": "PlatformId" } },
-                                    { "source": { "name": "apiConsumer" }, "sink": { "name": "ApiConsumer" } }
+                                    { "source": { "name": "Id", "type": "Int32" }, "sink": { "name": "InstanceId", "type": "Int32" } },
+                                    { "source": { "name": "LabProfileId", "type": "Int32" }, "sink": { "name": "LabProfileId", "type": "Int32" } },
+                                    { "source": { "name": "LabProfileName", "type": "String" }, "sink": { "name": "LabProfileName", "type": "String" } },
+                                    { "source": { "name": "SeriesId", "type": "Int32" }, "sink": { "name": "SeriesId", "type": "Int32" } },
+                                    { "source": { "name": "SeriesName", "type": "String" }, "sink": { "name": "SeriesName", "type": "String" } },
+                                    { "source": { "name": "UserId", "type": "String" }, "sink": { "name": "UserId", "type": "String" } },
+                                    { "source": { "name": "UserFirstName", "type": "String" }, "sink": { "name": "UserFirstName", "type": "String" } },
+                                    { "source": { "name": "UserLastName", "type": "String" }, "sink": { "name": "UserLastName", "type": "String" } },
+                                    { "source": { "name": "UserEmail", "type": "String" }, "sink": { "name": "UserEmail", "type": "String" } },
+                                    { "source": { "name": "ClassId", "type": "Int32" }, "sink": { "name": "ClassId", "type": "Int32" } },
+                                    { "source": { "name": "StartEpoch", "type": "Int64" }, "sink": { "name": "StartEpoch", "type": "Int64" } },
+                                    { "source": { "name": "EndEpoch", "type": "Int64" }, "sink": { "name": "EndEpoch", "type": "Int64" } },
+                                    { "source": { "name": "LastActivityEpoch", "type": "Int64" }, "sink": { "name": "LastActivityEpoch", "type": "Int64" } },
+                                    { "source": { "name": "ExpirationEpoch", "type": "Int64" }, "sink": { "name": "ExpirationEpoch", "type": "Int64" } },
+                                    { "source": { "name": "State", "type": "String" }, "sink": { "name": "State", "type": "String" } },
+                                    { "source": { "name": "CompletionStatus", "type": "String" }, "sink": { "name": "CompletionStatus", "type": "String" } },
+                                    { "source": { "name": "IpAddress", "type": "String" }, "sink": { "name": "IpAddress", "type": "String" } },
+                                    { "source": { "name": "Country", "type": "String" }, "sink": { "name": "Country", "type": "String" } },
+                                    { "source": { "name": "Region", "type": "String" }, "sink": { "name": "Region", "type": "String" } },
+                                    { "source": { "name": "City", "type": "String" }, "sink": { "name": "City", "type": "String" } },
+                                    { "source": { "name": "Latitude", "type": "Double" }, "sink": { "name": "Latitude", "type": "Double" } },
+                                    { "source": { "name": "Longitude", "type": "Double" }, "sink": { "name": "Longitude", "type": "Double" } },
+                                    { "source": { "name": "DatacenterId", "type": "Int32" }, "sink": { "name": "DatacenterId", "type": "Int32" } },
+                                    { "source": { "name": "DatacenterName", "type": "String" }, "sink": { "name": "DatacenterName", "type": "String" } },
+                                    { "source": { "name": "LabHostId", "type": "Int32" }, "sink": { "name": "LabHostId", "type": "Int32" } },
+                                    { "source": { "name": "LabHostName", "type": "String" }, "sink": { "name": "LabHostName", "type": "String" } },
+                                    { "source": { "name": "DeliveryRegionName", "type": "String" }, "sink": { "name": "DeliveryRegionName", "type": "String" } },
+                                    { "source": { "name": "LastLatency", "type": "Int32" }, "sink": { "name": "LastLatency", "type": "Int32" } },
+                                    { "source": { "name": "ErrorCount", "type": "Int32" }, "sink": { "name": "ErrorCount", "type": "Int32" } },
+                                    { "source": { "name": "StartupDuration", "type": "Int32" }, "sink": { "name": "StartupDuration", "type": "Int32" } },
+                                    { "source": { "name": "TotalRunTime", "type": "Int32" }, "sink": { "name": "TotalRunTime", "type": "Int32" } },
+                                    { "source": { "name": "TimeInSession", "type": "Int32" }, "sink": { "name": "TimeInSession", "type": "Int32" } },
+                                    { "source": { "name": "TaskCompletePercent", "type": "Double" }, "sink": { "name": "TaskCompletePercent", "type": "Double" } },
+                                    { "source": { "name": "ExamPassed", "type": "Boolean" }, "sink": { "name": "ExamPassed", "type": "Boolean" } },
+                                    { "source": { "name": "ExamScore", "type": "Double" }, "sink": { "name": "ExamScore", "type": "Double" } },
+                                    { "source": { "name": "IsExam", "type": "Boolean" }, "sink": { "name": "IsExam", "type": "Boolean" } },
+                                    { "source": { "name": "PlatformId", "type": "Int32" }, "sink": { "name": "PlatformId", "type": "Int32" } },
+                                    { "source": { "name": "ApiConsumer", "type": "String" }, "sink": { "name": "ApiConsumer", "type": "String" } }
                                 ]
                             }
                         },
@@ -248,6 +249,22 @@
                                 "parameters": {}
                             }
                         ]
+                    },
+                    {
+                        "name": "SkipTimedOutPage",
+                        "type": "Wait",
+                        "dependsOn": [
+                            {
+                                "activity": "CopySearchResultsToSql",
+                                "dependencyConditions": [
+                                    "Failed"
+                                ]
+                            }
+                        ],
+                        "userProperties": [],
+                        "typeProperties": {
+                            "waitTimeInSeconds": 1
+                        }
                     }
                 ]
             }
