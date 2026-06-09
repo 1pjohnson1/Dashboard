@@ -8,6 +8,7 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- TABLE: tblInstances
 -- One row per lab instance. InstanceId comes from Skillable API (not identity).
+-- Epoch values from the API are converted to DATETIME2 by usp_UpsertInstance.
 -- ─────────────────────────────────────────────────────────────────────────────
 IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'tblInstances')
 CREATE TABLE dbo.tblInstances (
@@ -21,14 +22,10 @@ CREATE TABLE dbo.tblInstances (
     UserLastName        NVARCHAR(100)   NULL,
     UserEmail           NVARCHAR(255)   NULL,
     ClassId             INT             NULL,
-    StartEpoch          BIGINT          NOT NULL,
-    EndEpoch            BIGINT          NULL,
-    LastActivityEpoch   BIGINT          NULL,
-    ExpirationEpoch     BIGINT          NULL,
-    StartDateTime AS DATEADD(SECOND, StartEpoch, CONVERT(DATETIME, '19700101', 112)) PERSISTED,
-    EndDateTime         AS CASE WHEN EndEpoch IS NOT NULL
-                        THEN DATEADD(SECOND, EndEpoch, CONVERT(DATETIME, '19700101', 112))
-                        ELSE NULL END PERSISTED,
+    StartDateTime       DATETIME2(3)    NOT NULL,
+    EndDateTime         DATETIME2(3)    NULL,
+    LastActivityDateTime DATETIME2(3)   NULL,
+    ExpirationDateTime  DATETIME2(3)    NULL,
     State               NVARCHAR(50)    NOT NULL,
     CompletionStatus    NVARCHAR(50)    NULL,
     IpAddress           NVARCHAR(50)    NULL,
@@ -61,7 +58,6 @@ GO
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- TABLE: tblErrors
--- One row per error event. Append-only — no updates.
 -- ─────────────────────────────────────────────────────────────────────────────
 IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'tblErrors')
 CREATE TABLE dbo.tblErrors (
@@ -86,7 +82,6 @@ GO
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- TABLE: tblActivities
--- One row per scored activity result within a lab instance.
 -- ─────────────────────────────────────────────────────────────────────────────
 IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'tblActivities')
 CREATE TABLE dbo.tblActivities (
@@ -107,7 +102,6 @@ GO
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- TABLE: tblGeoBuckets
--- Aggregated launch counts by IP + time window for concurrent launch detection.
 -- ─────────────────────────────────────────────────────────────────────────────
 IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'tblGeoBuckets')
 CREATE TABLE dbo.tblGeoBuckets (
@@ -128,84 +122,105 @@ CREATE TABLE dbo.tblGeoBuckets (
 );
 GO
 
+-- ─────────────────────────────────────────────────────────────────────────────
+-- TABLE: tblRefreshLog
+-- One row per pipeline run. WindowEnd represents data freshness shown on the
+-- dashboard "Last Refresh" indicator.
+-- ─────────────────────────────────────────────────────────────────────────────
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'tblRefreshLog')
+CREATE TABLE dbo.tblRefreshLog (
+    LogId               INT             IDENTITY(1,1) NOT NULL,
+    WindowStart         DATETIME2(3)    NOT NULL,
+    WindowEnd           DATETIME2(3)    NOT NULL,
+    IngestTimestamp     DATETIME2(3)    NOT NULL DEFAULT SYSUTCDATETIME(),
+
+    CONSTRAINT PK_tblRefreshLog PRIMARY KEY CLUSTERED (LogId)
+);
+GO
+
 -- =============================================================================
 -- INDEXES
 -- =============================================================================
 
--- tblInstances indexes
-CREATE NONCLUSTERED INDEX IX_tblInstances_State
-    ON dbo.tblInstances (State) INCLUDE (CompletionStatus, ErrorCount);
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_tblInstances_State')
+    CREATE NONCLUSTERED INDEX IX_tblInstances_State
+        ON dbo.tblInstances (State) INCLUDE (CompletionStatus, ErrorCount);
 
-CREATE NONCLUSTERED INDEX IX_tblInstances_StartEpoch
-    ON dbo.tblInstances (StartEpoch DESC)
-    INCLUDE (LabProfileId, SeriesId, State, CompletionStatus, ErrorCount);
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_tblInstances_StartDateTime')
+    CREATE NONCLUSTERED INDEX IX_tblInstances_StartDateTime
+        ON dbo.tblInstances (StartDateTime DESC)
+        INCLUDE (LabProfileId, SeriesId, State, CompletionStatus, ErrorCount);
 
-CREATE NONCLUSTERED INDEX IX_tblInstances_DeliveryRegion
-    ON dbo.tblInstances (DeliveryRegionName)
-    INCLUDE (ErrorCount, LastLatency, StartEpoch);
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_tblInstances_DeliveryRegion')
+    CREATE NONCLUSTERED INDEX IX_tblInstances_DeliveryRegion
+        ON dbo.tblInstances (DeliveryRegionName)
+        INCLUDE (ErrorCount, LastLatency, StartDateTime);
 
-CREATE NONCLUSTERED INDEX IX_tblInstances_ApiConsumer
-    ON dbo.tblInstances (ApiConsumer)
-    INCLUDE (ErrorCount, StartEpoch);
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_tblInstances_ApiConsumer')
+    CREATE NONCLUSTERED INDEX IX_tblInstances_ApiConsumer
+        ON dbo.tblInstances (ApiConsumer)
+        INCLUDE (ErrorCount, StartDateTime);
 
-CREATE NONCLUSTERED INDEX IX_tblInstances_IngestTimestamp
-    ON dbo.tblInstances (IngestTimestamp DESC);
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_tblInstances_IngestTimestamp')
+    CREATE NONCLUSTERED INDEX IX_tblInstances_IngestTimestamp
+        ON dbo.tblInstances (IngestTimestamp DESC);
 
-CREATE NONCLUSTERED INDEX IX_tblInstances_StartDateTime
-    ON dbo.tblInstances (StartDateTime DESC)
-    INCLUDE (DeliveryRegionName, IpAddress, Country);
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_tblInstances_DatacenterName')
+    CREATE NONCLUSTERED INDEX IX_tblInstances_DatacenterName
+        ON dbo.tblInstances (DatacenterName)
+        INCLUDE (ErrorCount, LabHostName);
 
-CREATE NONCLUSTERED INDEX IX_tblInstances_DatacenterName
-    ON dbo.tblInstances (DatacenterName)
-    INCLUDE (ErrorCount, LabHostName);
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_tblErrors_InstanceId')
+    CREATE NONCLUSTERED INDEX IX_tblErrors_InstanceId
+        ON dbo.tblErrors (InstanceId);
 
--- tblErrors indexes
-CREATE NONCLUSTERED INDEX IX_tblErrors_InstanceId
-    ON dbo.tblErrors (InstanceId);
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_tblErrors_ApiConsumer')
+    CREATE NONCLUSTERED INDEX IX_tblErrors_ApiConsumer
+        ON dbo.tblErrors (ApiConsumer)
+        INCLUDE (ErrorType, IngestTimestamp);
 
-CREATE NONCLUSTERED INDEX IX_tblErrors_ApiConsumer
-    ON dbo.tblErrors (ApiConsumer)
-    INCLUDE (ErrorType, IngestTimestamp);
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_tblErrors_IngestTimestamp')
+    CREATE NONCLUSTERED INDEX IX_tblErrors_IngestTimestamp
+        ON dbo.tblErrors (IngestTimestamp DESC);
 
-CREATE NONCLUSTERED INDEX IX_tblErrors_IngestTimestamp
-    ON dbo.tblErrors (IngestTimestamp DESC);
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_tblErrors_ErrorType')
+    CREATE NONCLUSTERED INDEX IX_tblErrors_ErrorType
+        ON dbo.tblErrors (ErrorType)
+        INCLUDE (InstanceId, ApiConsumer);
 
-CREATE NONCLUSTERED INDEX IX_tblErrors_ErrorType
-    ON dbo.tblErrors (ErrorType)
-    INCLUDE (InstanceId, ApiConsumer);
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_tblActivities_InstanceId')
+    CREATE NONCLUSTERED INDEX IX_tblActivities_InstanceId
+        ON dbo.tblActivities (InstanceId);
 
--- tblActivities indexes
-CREATE NONCLUSTERED INDEX IX_tblActivities_InstanceId
-    ON dbo.tblActivities (InstanceId);
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_tblActivities_IngestTimestamp')
+    CREATE NONCLUSTERED INDEX IX_tblActivities_IngestTimestamp
+        ON dbo.tblActivities (IngestTimestamp DESC);
 
-CREATE NONCLUSTERED INDEX IX_tblActivities_IngestTimestamp
-    ON dbo.tblActivities (IngestTimestamp DESC);
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_tblGeoBuckets_Region')
+    CREATE NONCLUSTERED INDEX IX_tblGeoBuckets_Region
+        ON dbo.tblGeoBuckets (DeliveryRegionName)
+        INCLUDE (InstanceCount, BucketWindowStart);
 
--- tblGeoBuckets indexes
-CREATE NONCLUSTERED INDEX IX_tblGeoBuckets_Region
-    ON dbo.tblGeoBuckets (DeliveryRegionName)
-    INCLUDE (InstanceCount, BucketWindowStart);
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_tblGeoBuckets_BucketWindow')
+    CREATE NONCLUSTERED INDEX IX_tblGeoBuckets_BucketWindow
+        ON dbo.tblGeoBuckets (BucketWindowStart DESC)
+        INCLUDE (IpAddress, InstanceCount, DeliveryRegionName);
 
-CREATE NONCLUSTERED INDEX IX_tblGeoBuckets_BucketWindow
-    ON dbo.tblGeoBuckets (BucketWindowStart DESC)
-    INCLUDE (IpAddress, InstanceCount, DeliveryRegionName);
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_tblGeoBuckets_IngestTimestamp')
+    CREATE NONCLUSTERED INDEX IX_tblGeoBuckets_IngestTimestamp
+        ON dbo.tblGeoBuckets (IngestTimestamp DESC);
 
-CREATE NONCLUSTERED INDEX IX_tblGeoBuckets_IngestTimestamp
-    ON dbo.tblGeoBuckets (IngestTimestamp DESC);
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_tblRefreshLog_IngestTimestamp')
+    CREATE NONCLUSTERED INDEX IX_tblRefreshLog_IngestTimestamp
+        ON dbo.tblRefreshLog (IngestTimestamp DESC);
 GO
 
 -- =============================================================================
 -- TABLE-VALUED PARAMETER TYPES
 -- =============================================================================
 
--- ─────────────────────────────────────────────────────────────────────────────
--- TYPE: InstanceTableType
--- Table-valued parameter type consumed by usp_UpsertInstance.
--- Referenced by ADF Copy Activity sink (sqlWriterTableType = dbo.InstanceTableType,
--- storedProcedureTableTypeParameterName = InstanceData).
--- Excludes computed columns (StartDateTime, EndDateTime) and server-default
--- column (IngestTimestamp) — those are derived or set by the proc/server.
--- ─────────────────────────────────────────────────────────────────────────────
+-- InstanceTableType receives epoch integers from ADF (Skillable API values).
+-- usp_UpsertInstance converts them to DATETIME2 before writing to tblInstances.
 IF TYPE_ID(N'dbo.InstanceTableType') IS NULL
     EXEC (N'
     CREATE TYPE dbo.InstanceTableType AS TABLE (
@@ -254,10 +269,6 @@ GO
 -- VIEWS
 -- =============================================================================
 
--- ─────────────────────────────────────────────────────────────────────────────
--- VIEW: vw_OverviewMetrics
--- Returns KPI aggregates for the Overview & Health dashboard page.
--- ─────────────────────────────────────────────────────────────────────────────
 CREATE OR ALTER VIEW dbo.vw_OverviewMetrics
 AS
 SELECT
@@ -287,11 +298,6 @@ SELECT
 FROM dbo.tblInstances;
 GO
 
--- ─────────────────────────────────────────────────────────────────────────────
--- VIEW: vw_ErrorRateByConsumer
--- Groups by API consumer to show which integration channel has highest errors.
--- The 2% threshold is flagged for alerting.
--- ─────────────────────────────────────────────────────────────────────────────
 CREATE OR ALTER VIEW dbo.vw_ErrorRateByConsumer
 AS
 SELECT
@@ -314,17 +320,11 @@ FROM dbo.tblInstances
 GROUP BY ApiConsumer;
 GO
 
--- ─────────────────────────────────────────────────────────────────────────────
--- VIEW: vw_ConcurrentLaunches
--- Buckets lab starts into 5-minute windows and counts concurrent launches
--- per delivery region. Flags windows with >4 concurrent launches.
--- ─────────────────────────────────────────────────────────────────────────────
 CREATE OR ALTER VIEW dbo.vw_ConcurrentLaunches
 AS
 WITH FiveMinWindows AS (
     SELECT
         DeliveryRegionName,
-        -- Floor StartDateTime to nearest 5-minute boundary
         DATEADD(MINUTE,
             (DATEDIFF(MINUTE, '2000-01-01', StartDateTime) / 5) * 5,
             '2000-01-01'
@@ -356,10 +356,6 @@ SELECT
 FROM FiveMinWindows;
 GO
 
--- ─────────────────────────────────────────────────────────────────────────────
--- VIEW: vw_RegionSummary
--- Launches and error metrics grouped by delivery region.
--- ─────────────────────────────────────────────────────────────────────────────
 CREATE OR ALTER VIEW dbo.vw_RegionSummary
 AS
 SELECT
@@ -381,10 +377,6 @@ FROM dbo.tblInstances
 GROUP BY DeliveryRegionName;
 GO
 
--- ─────────────────────────────────────────────────────────────────────────────
--- VIEW: vw_HourlyLaunchTrend
--- Hourly launch count trend for the time-series chart.
--- ─────────────────────────────────────────────────────────────────────────────
 CREATE OR ALTER VIEW dbo.vw_HourlyLaunchTrend
 AS
 SELECT
@@ -401,6 +393,53 @@ GROUP BY
         DATEDIFF(HOUR, '2000-01-01', StartDateTime),
         '2000-01-01'
     );
+GO
+
+-- =============================================================================
+-- MIGRATION — run once on existing databases to drop epoch columns and add
+-- DateTime columns. Safe to skip on fresh deployments (CREATE TABLE above
+-- already reflects the target schema).
+-- =============================================================================
+
+-- Step 1: Drop computed columns that derive from epoch columns
+IF EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('dbo.tblInstances') AND name = 'StartDateTime' AND is_computed = 1)
+    ALTER TABLE dbo.tblInstances DROP COLUMN StartDateTime;
+
+IF EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('dbo.tblInstances') AND name = 'EndDateTime' AND is_computed = 1)
+    ALTER TABLE dbo.tblInstances DROP COLUMN EndDateTime;
+GO
+
+-- Step 2: Drop epoch integer columns
+IF EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('dbo.tblInstances') AND name = 'StartEpoch')
+    ALTER TABLE dbo.tblInstances DROP COLUMN StartEpoch;
+
+IF EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('dbo.tblInstances') AND name = 'EndEpoch')
+    ALTER TABLE dbo.tblInstances DROP COLUMN EndEpoch;
+
+IF EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('dbo.tblInstances') AND name = 'LastActivityEpoch')
+    ALTER TABLE dbo.tblInstances DROP COLUMN LastActivityEpoch;
+
+IF EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('dbo.tblInstances') AND name = 'ExpirationEpoch')
+    ALTER TABLE dbo.tblInstances DROP COLUMN ExpirationEpoch;
+GO
+
+-- Step 3: Add DateTime columns if not present
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('dbo.tblInstances') AND name = 'StartDateTime')
+    ALTER TABLE dbo.tblInstances ADD StartDateTime DATETIME2(3) NOT NULL DEFAULT '1900-01-01';
+
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('dbo.tblInstances') AND name = 'EndDateTime')
+    ALTER TABLE dbo.tblInstances ADD EndDateTime DATETIME2(3) NULL;
+
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('dbo.tblInstances') AND name = 'LastActivityDateTime')
+    ALTER TABLE dbo.tblInstances ADD LastActivityDateTime DATETIME2(3) NULL;
+
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('dbo.tblInstances') AND name = 'ExpirationDateTime')
+    ALTER TABLE dbo.tblInstances ADD ExpirationDateTime DATETIME2(3) NULL;
+GO
+
+-- Step 4: Drop the epoch-based index if it still exists
+IF EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_tblInstances_StartEpoch')
+    DROP INDEX IX_tblInstances_StartEpoch ON dbo.tblInstances;
 GO
 
 PRINT 'Schema deployment complete.';

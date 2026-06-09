@@ -1,14 +1,16 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Drawer, Box, List, ListItem, ListItemButton, ListItemIcon,
-  ListItemText, Typography, Divider
+  ListItemText, Typography, Divider, Tooltip
 } from '@mui/material';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import BugReportIcon from '@mui/icons-material/BugReport';
 import RocketLaunchIcon from '@mui/icons-material/RocketLaunch';
 import PublicIcon from '@mui/icons-material/Public';
 import ScienceIcon from '@mui/icons-material/Science';
+import SyncIcon from '@mui/icons-material/Sync';
+import { fetchRefreshStatus } from '../api/client';
 
 const NAV_ITEMS = [
   { label: 'Overview & Health', path: '/', icon: <DashboardIcon /> },
@@ -17,9 +19,26 @@ const NAV_ITEMS = [
   { label: 'Geo Intelligence', path: '/geo', icon: <PublicIcon /> },
 ];
 
+function formatRefreshTime(isoString) {
+  if (!isoString) return null;
+  const d = new Date(isoString);
+  return d.toLocaleString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: 'numeric', minute: '2-digit', hour12: true,
+    timeZone: 'UTC', timeZoneName: 'short',
+  });
+}
+
 export default function Sidebar({ width = 260 }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const [refresh, setRefresh] = useState(null);
+
+  useEffect(() => {
+    fetchRefreshStatus()
+      .then(setRefresh)
+      .catch(() => {});
+  }, []);
 
   return (
     <Drawer
@@ -71,12 +90,7 @@ export default function Sidebar({ width = 260 }) {
                   },
                 }}
               >
-                <ListItemIcon
-                  sx={{
-                    color: isActive ? 'primary.main' : 'text.secondary',
-                    minWidth: 40,
-                  }}
-                >
+                <ListItemIcon sx={{ color: isActive ? 'primary.main' : 'text.secondary', minWidth: 40 }}>
                   {item.icon}
                 </ListItemIcon>
                 <ListItemText
@@ -93,8 +107,39 @@ export default function Sidebar({ width = 260 }) {
         })}
       </List>
 
+      {/* Last Refresh */}
+      <Box sx={{ mx: 1, mt: 'auto' }}>
+        <Divider sx={{ borderColor: 'rgba(255,255,255,0.06)', mb: 1.5 }} />
+        <Tooltip
+          title={refresh?.windowEnd ? `Data window end: ${formatRefreshTime(refresh.windowEnd)} UTC` : 'No refresh recorded yet'}
+          placement="right"
+          arrow
+        >
+          <Box
+            sx={{
+              display: 'flex', alignItems: 'flex-start', gap: 1,
+              px: 1.5, py: 1.25,
+              borderRadius: 2,
+              backgroundColor: 'rgba(0,210,255,0.05)',
+              border: '1px solid rgba(0,210,255,0.1)',
+              cursor: 'default',
+            }}
+          >
+            <SyncIcon sx={{ fontSize: 15, color: 'primary.main', mt: '2px', flexShrink: 0 }} />
+            <Box>
+              <Typography sx={{ fontSize: '0.65rem', color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.08em', lineHeight: 1 }}>
+                Data current as of
+              </Typography>
+              <Typography sx={{ fontSize: '0.75rem', color: refresh?.windowEnd ? '#fff' : 'text.secondary', mt: 0.4, lineHeight: 1.3 }}>
+                {refresh?.windowEnd ? formatRefreshTime(refresh.windowEnd) : '—'}
+              </Typography>
+            </Box>
+          </Box>
+        </Tooltip>
+      </Box>
+
       {/* Footer */}
-      <Box sx={{ mt: 'auto', p: 2, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+      <Box sx={{ p: 2, borderTop: '1px solid rgba(255,255,255,0.06)', mt: 1.5 }}>
         <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', textAlign: 'center' }}>
           v3.0 — Azure Edition
         </Typography>

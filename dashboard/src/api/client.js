@@ -63,4 +63,7 @@ export const fetchConcurrentLaunches = (hours = 24) =>
 export const fetchGeoBucketAnalysis = (region = 'all', days = 7) =>
   apiClient.get(`/GetGeoBucketAnalysis?region=${encodeURIComponent(region)}&days=${days}`);
 
+export const fetchRefreshStatus = () =>
+  apiClient.get('/GetRefreshStatus');
+
 export default apiClient;

@@ -126,6 +126,43 @@
             }
         },
         {
+            "name": "LogRefreshTime",
+            "type": "SqlServerStoredProcedure",
+            "dependsOn": [
+                {
+                    "activity": "ForEachPage",
+                    "dependencyConditions": [
+                        "Completed"
+                    ]
+                }
+            ],
+            "policy": {
+                "timeout": "0.00:05:00",
+                "retry": 1,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+            },
+            "userProperties": [],
+            "linkedServiceName": {
+                "referenceName": "ls_AzureSql",
+                "type": "LinkedServiceReference"
+            },
+            "typeProperties": {
+                "storedProcedureName": "dbo.usp_LogRefresh",
+                "storedProcedureParameters": {
+                    "WindowStartEpoch": {
+                        "value": "@pipeline().parameters.StartEpoch",
+                        "type": "Int64"
+                    },
+                    "WindowEndEpoch": {
+                        "value": "@pipeline().parameters.EndEpoch",
+                        "type": "Int64"
+                    }
+                }
+            }
+        },
+        {
             "name": "ForEachPage",
             "type": "ForEach",
             "dependsOn": [

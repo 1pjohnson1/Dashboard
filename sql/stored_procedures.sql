@@ -14,6 +14,8 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
+    -- Convert API epoch integers to DATETIME2 here so tblInstances stays clean.
+    -- Rows with NULL StartEpoch (pending/unstarted instances) are filtered out.
     MERGE dbo.tblInstances AS target
     USING (
         SELECT
@@ -27,10 +29,13 @@ BEGIN
             UserLastName,
             UserEmail,
             ClassId,
-            StartEpoch,
-            EndEpoch,
-            LastActivityEpoch,
-            ExpirationEpoch,
+            DATEADD(SECOND, StartEpoch,        '1970-01-01T00:00:00') AS StartDateTime,
+            CASE WHEN EndEpoch IS NOT NULL
+                 THEN DATEADD(SECOND, EndEpoch, '1970-01-01T00:00:00') END AS EndDateTime,
+            CASE WHEN LastActivityEpoch IS NOT NULL
+                 THEN DATEADD(SECOND, LastActivityEpoch, '1970-01-01T00:00:00') END AS LastActivityDateTime,
+            CASE WHEN ExpirationEpoch IS NOT NULL
+                 THEN DATEADD(SECOND, ExpirationEpoch,   '1970-01-01T00:00:00') END AS ExpirationDateTime,
             ISNULL(State, 'Unknown')            AS State,
             CompletionStatus,
             IpAddress,
@@ -62,49 +67,49 @@ BEGIN
     ON target.InstanceId = source.InstanceId
     WHEN MATCHED THEN
         UPDATE SET
-            LabProfileId        = source.LabProfileId,
-            LabProfileName      = source.LabProfileName,
-            SeriesId            = source.SeriesId,
-            SeriesName          = source.SeriesName,
-            UserId              = source.UserId,
-            UserFirstName       = source.UserFirstName,
-            UserLastName        = source.UserLastName,
-            UserEmail           = source.UserEmail,
-            ClassId             = source.ClassId,
-            StartEpoch          = source.StartEpoch,
-            EndEpoch            = source.EndEpoch,
-            LastActivityEpoch   = source.LastActivityEpoch,
-            ExpirationEpoch     = source.ExpirationEpoch,
-            State               = source.State,
-            CompletionStatus    = source.CompletionStatus,
-            IpAddress           = source.IpAddress,
-            Country             = source.Country,
-            Region              = source.Region,
-            City                = source.City,
-            Latitude            = source.Latitude,
-            Longitude           = source.Longitude,
-            DatacenterId        = source.DatacenterId,
-            DatacenterName      = source.DatacenterName,
-            LabHostId           = source.LabHostId,
-            LabHostName         = source.LabHostName,
-            DeliveryRegionName  = source.DeliveryRegionName,
-            LastLatency         = source.LastLatency,
-            ErrorCount          = source.ErrorCount,
-            StartupDuration     = source.StartupDuration,
-            TotalRunTime        = source.TotalRunTime,
-            TimeInSession       = source.TimeInSession,
-            TaskCompletePercent = source.TaskCompletePercent,
-            ExamPassed          = source.ExamPassed,
-            ExamScore           = source.ExamScore,
-            IsExam              = source.IsExam,
-            PlatformId          = source.PlatformId,
-            ApiConsumer         = source.ApiConsumer,
-            IngestTimestamp     = SYSUTCDATETIME()
+            LabProfileId            = source.LabProfileId,
+            LabProfileName          = source.LabProfileName,
+            SeriesId                = source.SeriesId,
+            SeriesName              = source.SeriesName,
+            UserId                  = source.UserId,
+            UserFirstName           = source.UserFirstName,
+            UserLastName            = source.UserLastName,
+            UserEmail               = source.UserEmail,
+            ClassId                 = source.ClassId,
+            StartDateTime           = source.StartDateTime,
+            EndDateTime             = source.EndDateTime,
+            LastActivityDateTime    = source.LastActivityDateTime,
+            ExpirationDateTime      = source.ExpirationDateTime,
+            State                   = source.State,
+            CompletionStatus        = source.CompletionStatus,
+            IpAddress               = source.IpAddress,
+            Country                 = source.Country,
+            Region                  = source.Region,
+            City                    = source.City,
+            Latitude                = source.Latitude,
+            Longitude               = source.Longitude,
+            DatacenterId            = source.DatacenterId,
+            DatacenterName          = source.DatacenterName,
+            LabHostId               = source.LabHostId,
+            LabHostName             = source.LabHostName,
+            DeliveryRegionName      = source.DeliveryRegionName,
+            LastLatency             = source.LastLatency,
+            ErrorCount              = source.ErrorCount,
+            StartupDuration         = source.StartupDuration,
+            TotalRunTime            = source.TotalRunTime,
+            TimeInSession           = source.TimeInSession,
+            TaskCompletePercent     = source.TaskCompletePercent,
+            ExamPassed              = source.ExamPassed,
+            ExamScore               = source.ExamScore,
+            IsExam                  = source.IsExam,
+            PlatformId              = source.PlatformId,
+            ApiConsumer             = source.ApiConsumer,
+            IngestTimestamp         = SYSUTCDATETIME()
     WHEN NOT MATCHED THEN
         INSERT (
             InstanceId, LabProfileId, LabProfileName, SeriesId, SeriesName,
             UserId, UserFirstName, UserLastName, UserEmail, ClassId,
-            StartEpoch, EndEpoch, LastActivityEpoch, ExpirationEpoch,
+            StartDateTime, EndDateTime, LastActivityDateTime, ExpirationDateTime,
             State, CompletionStatus, IpAddress, Country, Region, City,
             Latitude, Longitude, DatacenterId, DatacenterName,
             LabHostId, LabHostName, DeliveryRegionName,
@@ -115,7 +120,7 @@ BEGIN
         VALUES (
             source.InstanceId, source.LabProfileId, source.LabProfileName, source.SeriesId, source.SeriesName,
             source.UserId, source.UserFirstName, source.UserLastName, source.UserEmail, source.ClassId,
-            source.StartEpoch, source.EndEpoch, source.LastActivityEpoch, source.ExpirationEpoch,
+            source.StartDateTime, source.EndDateTime, source.LastActivityDateTime, source.ExpirationDateTime,
             source.State, source.CompletionStatus, source.IpAddress, source.Country, source.Region, source.City,
             source.Latitude, source.Longitude, source.DatacenterId, source.DatacenterName,
             source.LabHostId, source.LabHostName, source.DeliveryRegionName,
@@ -509,6 +514,26 @@ BEGIN
         @CutoffDate        AS CutoffDate,
         @RetentionDays     AS RetentionDays,
         SYSUTCDATETIME()   AS ExecutedAt;
+END;
+GO
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- PROCEDURE: usp_LogRefresh
+-- Called by ADF pipeline after ForEachPage completes. Records the data window
+-- so the dashboard can display a "Last Refresh" timestamp.
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE OR ALTER PROCEDURE dbo.usp_LogRefresh
+    @WindowStartEpoch   BIGINT,
+    @WindowEndEpoch     BIGINT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    INSERT INTO dbo.tblRefreshLog (WindowStart, WindowEnd)
+    VALUES (
+        DATEADD(SECOND, @WindowStartEpoch, '1970-01-01T00:00:00'),
+        DATEADD(SECOND, @WindowEndEpoch,   '1970-01-01T00:00:00')
+    );
 END;
 GO
 
