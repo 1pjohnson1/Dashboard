@@ -1,0 +1,14 @@
+{
+    "name": "api",
+    "version": "1.0.0",
+    "main": "src/functions/*.js",
+    "engines": {
+        "node": ">=18.x"
+    },
+    "dependencies": {
+        "@azure/functions": "^4.0.0",
+        "@azure/identity": "^4.4.1",
+        "@azure/keyvault-secrets": "^4.8.0",
+        "tedious": "^18.6.2"
+    }
+}

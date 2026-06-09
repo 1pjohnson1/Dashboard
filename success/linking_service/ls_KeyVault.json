@@ -1,0 +1,6 @@
+{
+    "type": "AzureKeyVault",
+    "typeProperties": {
+        "baseUrl": "https://kv-skillable-dashboard.vault.azure.net/"
+    }
+}
