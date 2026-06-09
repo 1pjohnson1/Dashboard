@@ -172,14 +172,10 @@
                             },
                             "sink": {
                                 "type": "AzureSqlSink",
-                                "writeBehavior": "upsert",
-                                "upsertSettings": {
-                                    "useTempDB": true,
-                                    "keys": {
-                                        "value": "@createArray('InstanceId')",
-                                        "type": "Expression"
-                                    }
-                                },
+                                "sqlWriterStoredProcedureName": "dbo.usp_UpsertInstance",
+                                "sqlWriterTableType": "dbo.InstanceTableType",
+                                "storedProcedureTableTypeParameterName": "InstanceData",
+                                "writeBehavior": "insert",
                                 "sqlWriterUseTableLock": false,
                                 "disableMetricsCollection": false
                             },
