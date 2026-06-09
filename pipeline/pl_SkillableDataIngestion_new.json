@@ -190,8 +190,6 @@
           },
           "sink": {
             "type": "AzureSqlSink",
-            "sqlWriterStoredProcedureName": "usp_UpsertInstances",
-            "storedProcedureTableTypeParameterName": "TVP",
             "writeBehavior": "upsert",
             "upsertSettings": {
               "useTempDB": true,
@@ -459,16 +457,8 @@
             "referenceName": "ds_SkillableSearch",
             "type": "DatasetReference",
             "parameters": {
-              "StartEpoch": {
-                "value": "@pipeline().parameters.StartEpoch",
-                "type": "Expression"
-              },
-              "EndEpoch": {
-                "value": "@pipeline().parameters.EndEpoch",
-                "type": "Expression"
-              },
-              "PageSize": {
-                "value": "@pipeline().parameters.PageSize",
+              "relativeUrl": {
+                "value": "@concat('labinstance/search?start=',string(pipeline().parameters.StartEpoch),'&end=',string(pipeline().parameters.EndEpoch),'&pageIndex=0&pageSize=',string(pipeline().parameters.PageSize),'&sort=start%20desc&mode=10')",
                 "type": "Expression"
               }
             }
