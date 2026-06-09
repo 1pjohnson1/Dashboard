@@ -48,9 +48,9 @@
             }
         },
         {
-            "name": "GetFirstPageAndCount",
-            "description": "Activity 1-Web Activity: GetFirstPageAndCount",
-            "type": "WebActivity",
+            "name": "EnsureFirstPage",
+            "description": "Retry the first-page call until the API returns TotalResults. The Skillable API intermittently returns an 'Execution Timeout Expired' body as HTTP 200, which ADF treats as success, so activity-level retry never fires. This Until loop retries until a valid response arrives.",
+            "type": "Until",
             "dependsOn": [
                 {
                     "activity": "SetApiKey",
@@ -59,28 +59,108 @@
                     ]
                 }
             ],
-            "policy": {
-                "timeout": "0.12:00:00",
-                "retry": 2,
-                "retryIntervalInSeconds": 60,
-                "secureOutput": false,
-                "secureInput": false
-            },
             "userProperties": [],
             "typeProperties": {
-                "method": "GET",
-                "headers": {
-                    "api_key": {
-                        "value": "@variables('ApiKeyVar')",
-                        "type": "Expression"
-                    },
-                    "User-Agent": "AzureDataFactory/1.0"
-                },
-                "url": {
-                    "value": "@concat('https://labondemand.com/api/v3/labinstance/search?start=', string(pipeline().parameters.StartEpoch), '&end=', string(pipeline().parameters.EndEpoch), '&pageIndex=0&pageSize=', string(pipeline().parameters.PageSize), '&sort=start%20desc&mode=10')",
+                "expression": {
+                    "value": "@variables('FirstPageOk')",
                     "type": "Expression"
                 },
-                "httpRequestTimeout": "00:05:00"
+                "timeout": "0.01:00:00",
+                "activities": [
+                    {
+                        "name": "GetFirstPageAndCount",
+                        "description": "Activity 1-Web Activity: GetFirstPageAndCount",
+                        "type": "WebActivity",
+                        "dependsOn": [],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 2,
+                            "retryIntervalInSeconds": 60,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "method": "GET",
+                            "headers": {
+                                "api_key": {
+                                    "value": "@variables('ApiKeyVar')",
+                                    "type": "Expression"
+                                },
+                                "User-Agent": "AzureDataFactory/1.0"
+                            },
+                            "url": {
+                                "value": "@concat('https://labondemand.com/api/v3/labinstance/search?start=', string(pipeline().parameters.StartEpoch), '&end=', string(pipeline().parameters.EndEpoch), '&pageIndex=0&pageSize=', string(pipeline().parameters.PageSize), '&sort=start%20desc&mode=10')",
+                                "type": "Expression"
+                            },
+                            "httpRequestTimeout": "00:05:00"
+                        }
+                    },
+                    {
+                        "name": "CaptureTotalResults",
+                        "type": "SetVariable",
+                        "dependsOn": [
+                            {
+                                "activity": "GetFirstPageAndCount",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            }
+                        ],
+                        "policy": {
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "variableName": "TotalResultsVar",
+                            "value": {
+                                "value": "@string(if(contains(activity('GetFirstPageAndCount').output, 'TotalResults'), activity('GetFirstPageAndCount').output.TotalResults, 0))",
+                                "type": "Expression"
+                            }
+                        }
+                    },
+                    {
+                        "name": "SetFirstPageOk",
+                        "type": "SetVariable",
+                        "dependsOn": [
+                            {
+                                "activity": "CaptureTotalResults",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            }
+                        ],
+                        "policy": {
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "variableName": "FirstPageOk",
+                            "value": {
+                                "value": "@contains(activity('GetFirstPageAndCount').output, 'TotalResults')",
+                                "type": "Expression"
+                            }
+                        }
+                    },
+                    {
+                        "name": "WaitBeforeRetry",
+                        "type": "Wait",
+                        "dependsOn": [
+                            {
+                                "activity": "SetFirstPageOk",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            }
+                        ],
+                        "userProperties": [],
+                        "typeProperties": {
+                            "waitTimeInSeconds": 10
+                        }
+                    }
+                ]
             }
         },
         {
@@ -88,7 +168,7 @@
             "type": "SetVariable",
             "dependsOn": [
                 {
-                    "activity": "GetFirstPageAndCount",
+                    "activity": "EnsureFirstPage",
                     "dependencyConditions": [
                         "Succeeded"
                     ]
@@ -101,7 +181,10 @@
             "userProperties": [],
             "typeProperties": {
                 "variableName": "TotalPages",
-                "value": "@add(div(activity('GetFirstPageAndCount').output.TotalResults, pipeline().parameters.PageSize), if(equals(mod(activity('GetFirstPageAndCount').output.TotalResults, pipeline().parameters.PageSize), 0), 0, 1))"
+                "value": {
+                    "value": "@add(div(int(variables('TotalResultsVar')), pipeline().parameters.PageSize), if(equals(mod(int(variables('TotalResultsVar')), pipeline().parameters.PageSize), 0), 0, 1))",
+                    "type": "Expression"
+                }
             }
         },
         {
@@ -232,10 +315,10 @@
                                     { "source": { "name": "UserLastName", "type": "String" }, "sink": { "name": "UserLastName", "type": "String" } },
                                     { "source": { "name": "UserEmail", "type": "String" }, "sink": { "name": "UserEmail", "type": "String" } },
                                     { "source": { "name": "ClassId", "type": "Int32" }, "sink": { "name": "ClassId", "type": "Int32" } },
-                                    { "source": { "name": "StartEpoch", "type": "Int64" }, "sink": { "name": "StartEpoch", "type": "Int64" } },
-                                    { "source": { "name": "EndEpoch", "type": "Int64" }, "sink": { "name": "EndEpoch", "type": "Int64" } },
-                                    { "source": { "name": "LastActivityEpoch", "type": "Int64" }, "sink": { "name": "LastActivityEpoch", "type": "Int64" } },
-                                    { "source": { "name": "ExpirationEpoch", "type": "Int64" }, "sink": { "name": "ExpirationEpoch", "type": "Int64" } },
+                                    { "source": { "name": "Start", "type": "Int64" }, "sink": { "name": "StartEpoch", "type": "Int64" } },
+                                    { "source": { "name": "End", "type": "Int64" }, "sink": { "name": "EndEpoch", "type": "Int64" } },
+                                    { "source": { "name": "LastActivity", "type": "Int64" }, "sink": { "name": "LastActivityEpoch", "type": "Int64" } },
+                                    { "source": { "name": "Expires", "type": "Int64" }, "sink": { "name": "ExpirationEpoch", "type": "Int64" } },
                                     { "source": { "name": "State", "type": "String" }, "sink": { "name": "State", "type": "String" } },
                                     { "source": { "name": "CompletionStatus", "type": "String" }, "sink": { "name": "CompletionStatus", "type": "String" } },
                                     { "source": { "name": "IpAddress", "type": "String" }, "sink": { "name": "IpAddress", "type": "String" } },
@@ -259,7 +342,7 @@
                                     { "source": { "name": "ExamScore", "type": "Double" }, "sink": { "name": "ExamScore", "type": "Double" } },
                                     { "source": { "name": "IsExam", "type": "Boolean" }, "sink": { "name": "IsExam", "type": "Boolean" } },
                                     { "source": { "name": "PlatformId", "type": "Int32" }, "sink": { "name": "PlatformId", "type": "Int32" } },
-                                    { "source": { "name": "ApiConsumer", "type": "String" }, "sink": { "name": "ApiConsumer", "type": "String" } }
+                                    { "source": { "name": "ApiConsumerName", "type": "String" }, "sink": { "name": "ApiConsumer", "type": "String" } }
                                 ]
                             }
                         },
@@ -334,6 +417,14 @@
         "PageArray": {
             "type": "Array",
             "defaultValue": []
+        },
+        "FirstPageOk": {
+            "type": "Boolean",
+            "defaultValue": false
+        },
+        "TotalResultsVar": {
+            "type": "String",
+            "defaultValue": "0"
         }
     },
     "annotations": []
