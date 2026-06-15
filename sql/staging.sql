@@ -190,3 +190,27 @@ GO
 
 PRINT 'tblInstancesRaw staging table deployed.';
 GO
+
+-- =============================================================================
+-- TABLE: tblPipelineRuns (Handoff Contract)
+-- Tracks raw ingest vs transform pipeline execution for idempotency and monitoring.
+-- =============================================================================
+IF OBJECT_ID(N'dbo.tblPipelineRuns', N'U') IS NOT NULL
+    DROP TABLE dbo.tblPipelineRuns;
+GO
+
+CREATE TABLE dbo.tblPipelineRuns
+(
+    RunId               UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWID(),
+    PipelineName        NVARCHAR(100)    NOT NULL,  -- 'RawIngest' or 'Transform'
+    Status              NVARCHAR(20)     NOT NULL,  -- 'Started', 'Completed', 'Failed'
+    RowsLanded          INT              NULL,      -- For RawIngest: count of rows inserted to tblInstancesRaw
+    PriorRunId          UNIQUEIDENTIFIER NULL,      -- For Transform: RunId of the completed RawIngest
+    StartTime           DATETIME2(3)     NOT NULL DEFAULT GETUTCDATE(),
+    EndTime             DATETIME2(3)     NULL,
+    ErrorMessage        NVARCHAR(MAX)    NULL,
+    INDEX ix_pipeline_status NONCLUSTERED (PipelineName, Status, StartTime DESC)
+);
+
+PRINT 'tblPipelineRuns tracking table deployed.';
+GO

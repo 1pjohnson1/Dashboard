@@ -535,5 +535,63 @@ BEGIN
 END;
 GO
 
+-- =============================================================================
+-- PROCEDURE: usp_LogPipelineRun (Handoff Tracking)
+-- Called by both RawIngest and Transform pipelines to track execution state.
+-- Enables idempotent reruns and observability of the two-stage flow.
+-- =============================================================================
+CREATE OR ALTER PROCEDURE dbo.usp_LogPipelineRun
+    @PipelineName       NVARCHAR(100),
+    @Status             NVARCHAR(20),       -- 'Started', 'Completed', 'Failed'
+    @RowsLanded         INT = NULL,         -- For RawIngest: count of rows inserted
+    @PriorRunId         UNIQUEIDENTIFIER = NULL,  -- For Transform: link to completed RawIngest
+    @ErrorMessage       NVARCHAR(MAX) = NULL,     -- For Failed runs
+    @RunId              UNIQUEIDENTIFIER = NULL OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- If RunId not provided, create new (RawIngest). Otherwise update (Transform).
+    IF @RunId IS NULL
+        SET @RunId = NEWID();
+
+    -- Insert or update the run record
+    IF @Status = 'Started'
+    BEGIN
+        INSERT INTO dbo.tblPipelineRuns (RunId, PipelineName, Status, RowsLanded, PriorRunId, ErrorMessage)
+        VALUES (@RunId, @PipelineName, @Status, @RowsLanded, @PriorRunId, @ErrorMessage);
+    END
+    ELSE IF @Status IN ('Completed', 'Failed')
+    BEGIN
+        UPDATE dbo.tblPipelineRuns
+        SET Status = @Status, EndTime = GETUTCDATE(), RowsLanded = @RowsLanded, ErrorMessage = @ErrorMessage
+        WHERE RunId = @RunId;
+    END;
+END;
+GO
+
+-- =============================================================================
+-- PROCEDURE: usp_GetLatestRawIngestRun (Transform Dependency Check)
+-- Called by Transform pipeline to find the latest successful RawIngest run.
+-- Returns NULL if no recent success (transform should wait or fail fast).
+-- =============================================================================
+CREATE OR ALTER PROCEDURE dbo.usp_GetLatestRawIngestRun
+    @RunId UNIQUEIDENTIFIER OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT TOP 1 @RunId = RunId
+    FROM dbo.tblPipelineRuns
+    WHERE PipelineName = 'RawIngest'
+      AND Status = 'Completed'
+      AND EndTime >= DATEADD(DAY, -1, GETUTCDATE())  -- Only within last 24 hours
+    ORDER BY EndTime DESC;
+
+    IF @RunId IS NULL
+        PRINT 'WARNING: No recent successful RawIngest run found. Transform may not have data.';
+END;
+GO
+
 PRINT 'Stored procedures deployment complete.';
 GO
