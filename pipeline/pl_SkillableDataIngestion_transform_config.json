@@ -1,0 +1,230 @@
+{
+  "name": "pl_SkillableDataIngestion_transform",
+  "properties": {
+    "activities": [
+      {
+        "name": "GetLatestRawIngestRun",
+        "description": "Dependency check: find the latest successful RawIngest run to ensure data is available",
+        "type": "SqlServerStoredProcedure",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.01:00:00",
+          "retry": 1,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "ls_AzureSql",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "storedProcedureName": "dbo.usp_GetLatestRawIngestRun",
+          "storedProcedureParameters": {
+            "RunId": {
+              "value": null,
+              "type": "Guid",
+              "direction": "Output"
+            }
+          }
+        }
+      },
+      {
+        "name": "LogTransformStart",
+        "description": "Log the start of the Transform pipeline run",
+        "type": "SqlServerStoredProcedure",
+        "dependsOn": [
+          {
+            "activity": "GetLatestRawIngestRun",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.01:00:00",
+          "retry": 1,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "ls_AzureSql",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "storedProcedureName": "dbo.usp_LogPipelineRun",
+          "storedProcedureParameters": {
+            "PipelineName": {
+              "value": "Transform",
+              "type": "String"
+            },
+            "Status": {
+              "value": "Started",
+              "type": "String"
+            },
+            "RunId": {
+              "value": null,
+              "type": "Guid",
+              "direction": "Output"
+            }
+          }
+        }
+      },
+      {
+        "name": "CopyRawToNormalized",
+        "description": "Copy and normalize data from tblInstancesRaw to tblInstances. Handles field selection, JSON serialization, and timestamp management.",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "LogTransformStart",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "1.00:00:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 60,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": {
+              "value": "SELECT\n  Id, LabProfileId, LabProfileName, SeriesId, SeriesName,\n  UserFirstName, UserLastName, UserEmail,\n  InstructorName, InstructorEmail,\n  [Start], [End], LastActivity, Expires, LastSave, SaveExpires,\n  StartTime, EndTime, LastActivityTime, ExpiresTime, LastSaveTime, SaveExpiresTime,\n  [State], CompletionStatus,\n  IpAddress, Country, Region, City, Latitude, Longitude,\n  DatacenterId, DatacenterName, DeliveryRegionId, DeliveryRegionName,\n  LabHostId, LabHostName, PoolMemberName,\n  StartupDuration, EstimatedReadySeconds, TotalRunTime, TimeInSession, TimeRemaining,\n  ErrorCount, LastLatency,\n  CONVERT(NVARCHAR(MAX), Errors) AS Errors,\n  IsExam, ExamPassed, ExamScore, ExamMaxPossibleScore, ExamPassingScore,\n  TaskCompletePercent,\n  CONVERT(NVARCHAR(MAX), ScriptResults) AS ScriptResults,\n  LastSaveTriggerType, BrowserUserAgent, RemoteController, [Language],\n  PlatformId, ApiConsumerName,\n  CONVERT(NVARCHAR(MAX), Notes) AS Notes,\n  CONVERT(NVARCHAR(MAX), Sessions) AS Sessions\nFROM dbo.tblInstancesRaw",
+              "type": "Expression"
+            },
+            "queryTimeout": "02:00:00"
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "disableMetricsCollection": false
+          },
+          "enableStaging": false,
+          "translator": {
+            "type": "TabularTranslator",
+            "mappings": [
+              { "source": { "name": "Id", "type": "Int32" }, "sink": { "name": "Id", "type": "Int32" } },
+              { "source": { "name": "LabProfileId", "type": "Int32" }, "sink": { "name": "LabProfileId", "type": "Int32" } },
+              { "source": { "name": "LabProfileName", "type": "String" }, "sink": { "name": "LabProfileName", "type": "String" } },
+              { "source": { "name": "SeriesId", "type": "Int32" }, "sink": { "name": "SeriesId", "type": "Int32" } },
+              { "source": { "name": "SeriesName", "type": "String" }, "sink": { "name": "SeriesName", "type": "String" } },
+              { "source": { "name": "UserFirstName", "type": "String" }, "sink": { "name": "UserFirstName", "type": "String" } },
+              { "source": { "name": "UserLastName", "type": "String" }, "sink": { "name": "UserLastName", "type": "String" } },
+              { "source": { "name": "UserEmail", "type": "String" }, "sink": { "name": "UserEmail", "type": "String" } },
+              { "source": { "name": "InstructorName", "type": "String" }, "sink": { "name": "InstructorName", "type": "String" } },
+              { "source": { "name": "InstructorEmail", "type": "String" }, "sink": { "name": "InstructorEmail", "type": "String" } },
+              { "source": { "name": "Start", "type": "Int64" }, "sink": { "name": "Start", "type": "Int64" } },
+              { "source": { "name": "End", "type": "Int64" }, "sink": { "name": "End", "type": "Int64" } },
+              { "source": { "name": "LastActivity", "type": "Int64" }, "sink": { "name": "LastActivity", "type": "Int64" } },
+              { "source": { "name": "Expires", "type": "Int64" }, "sink": { "name": "Expires", "type": "Int64" } },
+              { "source": { "name": "LastSave", "type": "Int64" }, "sink": { "name": "LastSave", "type": "Int64" } },
+              { "source": { "name": "SaveExpires", "type": "Int64" }, "sink": { "name": "SaveExpires", "type": "Int64" } },
+              { "source": { "name": "StartTime", "type": "String" }, "sink": { "name": "StartTime", "type": "String" } },
+              { "source": { "name": "EndTime", "type": "String" }, "sink": { "name": "EndTime", "type": "String" } },
+              { "source": { "name": "LastActivityTime", "type": "String" }, "sink": { "name": "LastActivityTime", "type": "String" } },
+              { "source": { "name": "ExpiresTime", "type": "String" }, "sink": { "name": "ExpiresTime", "type": "String" } },
+              { "source": { "name": "LastSaveTime", "type": "String" }, "sink": { "name": "LastSaveTime", "type": "String" } },
+              { "source": { "name": "SaveExpiresTime", "type": "String" }, "sink": { "name": "SaveExpiresTime", "type": "String" } },
+              { "source": { "name": "State", "type": "String" }, "sink": { "name": "State", "type": "String" } },
+              { "source": { "name": "CompletionStatus", "type": "String" }, "sink": { "name": "CompletionStatus", "type": "String" } },
+              { "source": { "name": "IpAddress", "type": "String" }, "sink": { "name": "IpAddress", "type": "String" } },
+              { "source": { "name": "Country", "type": "String" }, "sink": { "name": "Country", "type": "String" } },
+              { "source": { "name": "Region", "type": "String" }, "sink": { "name": "Region", "type": "String" } },
+              { "source": { "name": "City", "type": "String" }, "sink": { "name": "City", "type": "String" } },
+              { "source": { "name": "Latitude", "type": "Double" }, "sink": { "name": "Latitude", "type": "Double" } },
+              { "source": { "name": "Longitude", "type": "Double" }, "sink": { "name": "Longitude", "type": "Double" } },
+              { "source": { "name": "DatacenterId", "type": "Int32" }, "sink": { "name": "DatacenterId", "type": "Int32" } },
+              { "source": { "name": "DatacenterName", "type": "String" }, "sink": { "name": "DatacenterName", "type": "String" } },
+              { "source": { "name": "DeliveryRegionId", "type": "Int32" }, "sink": { "name": "DeliveryRegionId", "type": "Int32" } },
+              { "source": { "name": "DeliveryRegionName", "type": "String" }, "sink": { "name": "DeliveryRegionName", "type": "String" } },
+              { "source": { "name": "LabHostId", "type": "Int32" }, "sink": { "name": "LabHostId", "type": "Int32" } },
+              { "source": { "name": "LabHostName", "type": "String" }, "sink": { "name": "LabHostName", "type": "String" } },
+              { "source": { "name": "PoolMemberName", "type": "String" }, "sink": { "name": "PoolMemberName", "type": "String" } },
+              { "source": { "name": "StartupDuration", "type": "Int32" }, "sink": { "name": "StartupDuration", "type": "Int32" } },
+              { "source": { "name": "EstimatedReadySeconds", "type": "Int32" }, "sink": { "name": "EstimatedReadySeconds", "type": "Int32" } },
+              { "source": { "name": "TotalRunTime", "type": "Int32" }, "sink": { "name": "TotalRunTime", "type": "Int32" } },
+              { "source": { "name": "TimeInSession", "type": "Int32" }, "sink": { "name": "TimeInSession", "type": "Int32" } },
+              { "source": { "name": "TimeRemaining", "type": "Int32" }, "sink": { "name": "TimeRemaining", "type": "Int32" } },
+              { "source": { "name": "ErrorCount", "type": "Int32" }, "sink": { "name": "ErrorCount", "type": "Int32" } },
+              { "source": { "name": "LastLatency", "type": "Int32" }, "sink": { "name": "LastLatency", "type": "Int32" } },
+              { "source": { "name": "Errors", "type": "String" }, "sink": { "name": "Errors", "type": "String" } },
+              { "source": { "name": "IsExam", "type": "Boolean" }, "sink": { "name": "IsExam", "type": "Boolean" } },
+              { "source": { "name": "ExamPassed", "type": "Boolean" }, "sink": { "name": "ExamPassed", "type": "Boolean" } },
+              { "source": { "name": "ExamScore", "type": "Double" }, "sink": { "name": "ExamScore", "type": "Double" } },
+              { "source": { "name": "ExamMaxPossibleScore", "type": "Double" }, "sink": { "name": "ExamMaxPossibleScore", "type": "Double" } },
+              { "source": { "name": "ExamPassingScore", "type": "Double" }, "sink": { "name": "ExamPassingScore", "type": "Double" } },
+              { "source": { "name": "TaskCompletePercent", "type": "Double" }, "sink": { "name": "TaskCompletePercent", "type": "Double" } },
+              { "source": { "name": "ScriptResults", "type": "String" }, "sink": { "name": "ScriptResults", "type": "String" } },
+              { "source": { "name": "LastSaveTriggerType", "type": "String" }, "sink": { "name": "LastSaveTriggerType", "type": "String" } },
+              { "source": { "name": "BrowserUserAgent", "type": "String" }, "sink": { "name": "BrowserUserAgent", "type": "String" } },
+              { "source": { "name": "RemoteController", "type": "String" }, "sink": { "name": "RemoteController", "type": "String" } },
+              { "source": { "name": "Language", "type": "String" }, "sink": { "name": "Language", "type": "String" } },
+              { "source": { "name": "PlatformId", "type": "Int32" }, "sink": { "name": "PlatformId", "type": "Int32" } },
+              { "source": { "name": "ApiConsumerName", "type": "String" }, "sink": { "name": "ApiConsumerName", "type": "String" } },
+              { "source": { "name": "Notes", "type": "String" }, "sink": { "name": "Notes", "type": "String" } },
+              { "source": { "name": "Sessions", "type": "String" }, "sink": { "name": "Sessions", "type": "String" } }
+            ]
+          }
+        }
+      },
+      {
+        "name": "LogTransformComplete",
+        "description": "Log successful completion of the Transform pipeline",
+        "type": "SqlServerStoredProcedure",
+        "dependsOn": [
+          {
+            "activity": "CopyRawToNormalized",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.01:00:00",
+          "retry": 1,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "ls_AzureSql",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "storedProcedureName": "dbo.usp_LogPipelineRun",
+          "storedProcedureParameters": {
+            "PipelineName": {
+              "value": "Transform",
+              "type": "String"
+            },
+            "Status": {
+              "value": "Completed",
+              "type": "String"
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {},
+    "variables": {},
+    "folder": {
+      "name": "SkillableDashboard"
+    },
+    "annotations": [
+      "transform",
+      "normalized",
+      "ops-monitoring",
+      "stage-2-of-2"
+    ]
+  }
+}
