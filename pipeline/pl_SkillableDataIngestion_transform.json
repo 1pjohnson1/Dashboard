@@ -1,0 +1,558 @@
+{
+  "name": "pl_SkillableDataIngestion_new",
+  "properties": {
+    "description": "REST-connector native pagination pipeline. Single Copy activity with NextPageUrl pagination upserts all pages to tblInstances keyed on Id->InstanceId. Hard-fails if TotalResults=0 to prevent silent empty runs.",
+    "activities": [
+      {
+        "name": "GetApiKey",
+        "description": "Retrieve Skillable API key from Key Vault via MSI",
+        "type": "WebActivity",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.00:05:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": true,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "method": "GET",
+          "url": "https://kv-skillable-dashboard.vault.azure.net/secrets/SkillableApiKey?api-version=7.0",
+          "authentication": {
+            "type": "MSI",
+            "resource": "https://vault.azure.net"
+          }
+        }
+      },
+      {
+        "name": "SetApiKey",
+        "description": "Store API key in pipeline variable",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "GetApiKey",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": true,
+          "secureInput": true
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "ApiKeyVar",
+          "value": {
+            "value": "@activity('GetApiKey').output.value",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "ProbeFirstPage",
+        "description": "Fetch page 0 (pageSize=1) to verify API health and TotalResults>0. Retries 3x with 30s gap to handle intermittent HTTP-200 timeout bodies that look like success.",
+        "type": "WebActivity",
+        "dependsOn": [
+          {
+            "activity": "SetApiKey",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.00:10:00",
+          "retry": 3,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "method": "GET",
+          "headers": {
+            "api_key": {
+              "value": "@variables('ApiKeyVar')",
+              "type": "Expression"
+            },
+            "User-Agent": "AzureDataFactory/2.0"
+          },
+          "url": {
+            "value": "@concat('https://labondemand.com/api/v3/labinstance/search?start=',string(pipeline().parameters.StartEpoch),'&end=',string(pipeline().parameters.EndEpoch),'&pageIndex=0&pageSize=1&sort=start%20desc&mode=10')",
+            "type": "Expression"
+          },
+          "httpRequestTimeout": "00:05:00"
+        }
+      },
+      {
+        "name": "CaptureTotalResults",
+        "description": "Capture TotalResults; defaults to 0 if field absent (timeout or error body).",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "ProbeFirstPage",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "TotalResultsVar",
+          "value": {
+            "value": "@string(if(and(contains(activity('ProbeFirstPage').output,'TotalResults'),not(equals(activity('ProbeFirstPage').output.TotalResults,null))),activity('ProbeFirstPage').output.TotalResults,0))",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "FailIfNoResults",
+        "description": "Hard-fail if TotalResults=0 to prevent silent empty run masking an API outage or bad date range.",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "CaptureTotalResults",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(int(variables('TotalResultsVar')),0)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "ThrowNoResults",
+              "description": "Intentional failure: TotalResults=0 or non-data body returned. Check date range and API health.",
+              "type": "WebActivity",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "0.00:01:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "method": "GET",
+                "url": {
+                  "value": "@concat('https://intentional-pipeline-failure.invalid/TotalResults=0_Start=',string(pipeline().parameters.StartEpoch),'_End=',string(pipeline().parameters.EndEpoch))",
+                  "type": "Expression"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "CopyAllPagesToSql",
+        "description": "Single Copy using REST connector native pagination via NextPageUrl. ADF streams all pages directly to tblInstances via upsert keyed on Id->InstanceId. No ForEach, no page array, no temp vars - replaces the 75-min serial loop.",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "FailIfNoResults",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.04:00:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 60,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "RestSource",
+            "httpRequestTimeout": "00:05:00",
+            "requestInterval": "00.00:00:00.010",
+            "requestMethod": "GET",
+            "additionalHeaders": {
+              "api_key": "@variables('ApiKeyVar')",
+              "User-Agent": "AzureDataFactory/2.0"
+            },
+            "paginationRules": {
+              "AbsoluteUrl": "$.NextPageUrl"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "upsert",
+            "upsertSettings": {
+              "useTempDB": true,
+              "keys": [
+                "InstanceId"
+              ]
+            },
+            "sqlWriterUseTableLock": false,
+            "disableMetricsCollection": false
+          },
+          "enableStaging": false,
+          "translator": {
+            "type": "TabularTranslator",
+            "collectionReference": "$['Results']",
+            "mapComplexValuesToString": false,
+            "mappings": [
+              {
+                "source": {
+                  "path": "$['Results'][*]['Id']"
+                },
+                "sink": {
+                  "name": "InstanceId",
+                  "type": "Int32"
+                }
+              },
+              {
+                "source": {
+                  "path": "$['Results'][*]['LabProfileId']"
+                },
+                "sink": {
+                  "name": "LabProfileId",
+                  "type": "Int32"
+                }
+              },
+              {
+                "source": {
+                  "path": "$['Results'][*]['LabProfileName']"
+                },
+                "sink": {
+                  "name": "LabProfileName",
+                  "type": "String"
+                }
+              },
+              {
+                "source": {
+                  "path": "$['Results'][*]['SeriesId']"
+                },
+                "sink": {
+                  "name": "SeriesId",
+                  "type": "Int32"
+                }
+              },
+              {
+                "source": {
+                  "path": "$['Results'][*]['SeriesName']"
+                },
+                "sink": {
+                  "name": "SeriesName",
+                  "type": "String"
+                }
+              },
+              {
+                "source": {
+                  "path": "$['Results'][*]['UserId']"
+                },
+                "sink": {
+                  "name": "UserId",
+                  "type": "String"
+                }
+              },
+              {
+                "source": {
+                  "path": "$['Results'][*]['UserFirstName']"
+                },
+                "sink": {
+                  "name": "UserFirstName",
+                  "type": "String"
+                }
+              },
+              {
+                "source": {
+                  "path": "$['Results'][*]['UserLastName']"
+                },
+                "sink": {
+                  "name": "UserLastName",
+                  "type": "String"
+                }
+              },
+              {
+                "source": {
+                  "path": "$['Results'][*]['UserEmail']"
+                },
+                "sink": {
+                  "name": "UserEmail",
+                  "type": "String"
+                }
+              },
+              {
+                "source": {
+                  "path": "$['Results'][*]['ClassId']"
+                },
+                "sink": {
+                  "name": "ClassId",
+                  "type": "Int32"
+                }
+              },
+              {
+                "source": {
+                  "path": "$['Results'][*]['Start']"
+                },
+                "sink": {
+                  "name": "StartEpoch",
+                  "type": "Int64"
+                }
+              },
+              {
+                "source": {
+                  "path": "$['Results'][*]['End']"
+                },
+                "sink": {
+                  "name": "EndEpoch",
+                  "type": "Int64"
+                }
+              },
+              {
+                "source": {
+                  "path": "$['Results'][*]['LastActivity']"
+                },
+                "sink": {
+                  "name": "LastActivityEpoch",
+                  "type": "Int64"
+                }
+              },
+              {
+                "source": {
+                  "path": "$['Results'][*]['Expires']"
+                },
+                "sink": {
+                  "name": "ExpirationEpoch",
+                  "type": "Int64"
+                }
+              },
+              {
+                "source": {
+                  "path": "$['Results'][*]['State']"
+                },
+                "sink": {
+                  "name": "State",
+                  "type": "String"
+                }
+              },
+              {
+                "source": {
+                  "path": "$['Results'][*]['CompletionStatus']"
+                },
+                "sink": {
+                  "name": "CompletionStatus",
+                  "type": "String"
+                }
+              },
+              {
+                "source": {
+                  "path": "$['Results'][*]['IpAddress']"
+                },
+                "sink": {
+                  "name": "IpAddress",
+                  "type": "String"
+                }
+              },
+              {
+                "source": {
+                  "path": "$['Results'][*]['Country']"
+                },
+                "sink": {
+                  "name": "Country",
+                  "type": "String"
+                }
+              },
+              {
+                "source": {
+                  "path": "$['Results'][*]['Region']"
+                },
+                "sink": {
+                  "name": "Region",
+                  "type": "String"
+                }
+              },
+              {
+                "source": {
+                  "path": "$['Results'][*]['City']"
+                },
+                "sink": {
+                  "name": "City",
+                  "type": "String"
+                }
+              },
+              {
+                "source": {
+                  "path": "$['Results'][*]['Latitude']"
+                },
+                "sink": {
+                  "name": "Latitude",
+                  "type": "Double"
+                }
+              },
+              {
+                "source": {
+                  "path": "$['Results'][*]['Longitude']"
+                },
+                "sink": {
+                  "name": "Longitude",
+                  "type": "Double"
+                }
+              },
+              {
+                "source": {
+                  "path": "$['Results'][*]['Duration']"
+                },
+                "sink": {
+                  "name": "Duration",
+                  "type": "Int32"
+                }
+              },
+              {
+                "source": {
+                  "path": "$['Results'][*]['PlatformId']"
+                },
+                "sink": {
+                  "name": "PlatformId",
+                  "type": "Int32"
+                }
+              },
+              {
+                "source": {
+                  "path": "$['Results'][*]['ExamScore']"
+                },
+                "sink": {
+                  "name": "ExamScore",
+                  "type": "Double"
+                }
+              },
+              {
+                "source": {
+                  "path": "$['Results'][*]['IsExam']"
+                },
+                "sink": {
+                  "name": "IsExam",
+                  "type": "Boolean"
+                }
+              },
+              {
+                "source": {
+                  "path": "$['Results'][*]['ApiConsumerName']"
+                },
+                "sink": {
+                  "name": "ApiConsumer",
+                  "type": "String"
+                }
+              }
+            ]
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_SkillableSearch",
+            "type": "DatasetReference",
+            "parameters": {
+              "relativeUrl": {
+                "value": "@concat('labinstance/search?start=',string(pipeline().parameters.StartEpoch),'&end=',string(pipeline().parameters.EndEpoch),'&pageIndex=0&pageSize=',string(pipeline().parameters.PageSize),'&sort=start%20desc&mode=10')",
+                "type": "Expression"
+              }
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_SqlInstances",
+            "type": "DatasetReference"
+          }
+        ]
+      },
+      {
+        "name": "LogRefresh",
+        "description": "Record the run in tblRefreshLog for dashboard health monitoring.",
+        "type": "SqlServerStoredProcedure",
+        "dependsOn": [
+          {
+            "activity": "CopyAllPagesToSql",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.00:05:00",
+          "retry": 1,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "ls_AzureSql",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "storedProcedureName": "usp_LogRefresh",
+          "storedProcedureParameters": {
+            "PipelineName": {
+              "value": "pl_SkillableDataIngestion_new",
+              "type": "String"
+            },
+            "RunId": {
+              "value": {
+                "value": "@pipeline().RunId",
+                "type": "Expression"
+              },
+              "type": "String"
+            },
+            "RowsUpserted": {
+              "value": {
+                "value": "@string(activity('CopyAllPagesToSql').output.rowsCopied)",
+                "type": "Expression"
+              },
+              "type": "String"
+            },
+            "TotalResults": {
+              "value": {
+                "value": "@variables('TotalResultsVar')",
+                "type": "Expression"
+              },
+              "type": "String"
+            },
+            "Status": {
+              "value": "Success",
+              "type": "String"
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "StartEpoch": {
+        "type": "int"
+      },
+      "EndEpoch": {
+        "type": "int"
+      },
+      "PageSize": {
+        "type": "int",
+        "defaultValue": 100
+      }
+    },
+    "variables": {
+      "ApiKeyVar": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "TotalResultsVar": {
+        "type": "String",
+        "defaultValue": "0"
+      }
+    },
+    "annotations": []
+  }
+}
