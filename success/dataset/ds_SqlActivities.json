@@ -1,0 +1,44 @@
+{
+    "linkedServiceName": {
+        "referenceName": "ls_AzureSql",
+        "type": "LinkedServiceReference"
+    },
+    "annotations": [],
+    "type": "AzureSqlTable",
+    "typeProperties": {
+        "schema": "dbo",
+        "table": "tblActivities"
+    },
+    "schema": [
+        {
+            "name": "InstanceId",
+            "type": "int",
+            "precision": 10
+        },
+        {
+            "name": "ActivityType",
+            "type": "nvarchar"
+        },
+        {
+            "name": "ActivityTimestamp",
+            "type": "bigint",
+            "precision": 19
+        },
+        {
+            "name": "ActivityDateTime",
+            "type": "datetime",
+            "precision": 23,
+            "scale": 3
+        },
+        {
+            "name": "Details",
+            "type": "nvarchar"
+        },
+        {
+            "name": "IngestTimestamp",
+            "type": "datetime2",
+            "precision": 27,
+            "scale": 7
+        }
+    ]
+}

@@ -39,7 +39,7 @@ export default function GeoBucketsPage() {
       setLoading(true);
       setError(null);
       const result = await fetchGeoBucketAnalysis(region, 7);
-      setData(result?.data || result);
+      setData(result);
     } catch (err) {
       setError(err.message || 'Failed to load geo data');
     } finally {
@@ -72,39 +72,12 @@ export default function GeoBucketsPage() {
     );
   }
 
-  const periodDays = data?.periodDays || 7;
-
-  const regions = data?.regions || (data?.byCountry || []).map((row) => ({
-    region: row.country,
-    totalLaunches: row.instances || 0,
-    errorCount: row.errors || 0,
-    errorRate: (row.instances || 0) > 0 ? Number((((row.errors || 0) * 100) / row.instances).toFixed(2)) : 0,
-    avgLatencyMs: null,
-  }));
-
-  const geoBuckets = data?.geoBuckets || (data?.detailedLocations || []).map((row, idx) => ({
-    id: `${row.Country || 'NA'}-${row.Region || 'NA'}-${row.City || 'NA'}-${idx}`,
-    ipAddress: 'N/A',
-    country: row.Country,
-    region: row.Region,
-    city: row.City,
-    deliveryRegion: row.Region,
-    instanceCount: row.InstanceCount || 0,
-    seriesName: 'N/A',
-    windowStart: null,
-  }));
-
-  const availableRegions = data?.availableRegions || [
-    'all',
-    ...Array.from(new Set(geoBuckets.map((row) => row.region).filter(Boolean))),
-  ];
-
-  const totalLaunches = regions.reduce((sum, r) => sum + (r.totalLaunches || 0), 0);
-  const topRegion = regions.length > 0
-    ? regions.reduce((max, r) => (r.totalLaunches || 0) > (max.totalLaunches || 0) ? r : max, regions[0])
+  const totalLaunches = data.regions.reduce((sum, r) => sum + r.totalLaunches, 0);
+  const topRegion = data.regions.length > 0
+    ? data.regions.reduce((max, r) => r.totalLaunches > max.totalLaunches ? r : max, data.regions[0])
     : { region: 'N/A', totalLaunches: 0 };
-  const avgLatency = regions.length > 0
-    ? (regions.reduce((sum, r) => sum + (r.avgLatencyMs || 0), 0) / regions.length).toFixed(1)
+  const avgLatency = data.regions.length > 0
+    ? (data.regions.reduce((sum, r) => sum + (r.avgLatencyMs || 0), 0) / data.regions.length).toFixed(1)
     : 0;
 
   return (
@@ -112,12 +85,12 @@ export default function GeoBucketsPage() {
       {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
-          <Typography variant="h4" sx={{ color: '#fff' }}>Geo Insights</Typography>
-          <Typography variant="subtitle1">Last {periodDays} days — Regional launch and latency analysis</Typography>
+          <Typography variant="h4" sx={{ color: '#fff' }}>Geo Intelligence</Typography>
+          <Typography variant="subtitle1">Last {data.periodDays} days — Regional launch and latency analysis</Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
           <RegionSlicer
-            regions={availableRegions}
+            regions={data.availableRegions}
             selectedRegion={selectedRegion}
             onChange={handleRegionChange}
           />
@@ -132,7 +105,7 @@ export default function GeoBucketsPage() {
         <Grid item xs={12} sm={4}>
           <KpiCard
             title="Total Regions"
-            value={regions.length}
+            value={data.regions.length}
             subtitle={`${totalLaunches.toLocaleString()} total launches`}
             icon={<PublicIcon />}
             color={CHART_COLORS.primary}
@@ -164,7 +137,7 @@ export default function GeoBucketsPage() {
         <Grid item xs={12}>
           <ChartCard title="Launches by Delivery Region" subtitle="Total instance launches per region" height={350}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={regions} layout="vertical" margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
+              <BarChart data={data.regions} layout="vertical" margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
                 <XAxis type="number" stroke="#546e7a" fontSize={11} />
                 <YAxis dataKey="region" type="category" stroke="#546e7a" fontSize={10} width={180} />
@@ -177,7 +150,7 @@ export default function GeoBucketsPage() {
                   }}
                 />
                 <Bar dataKey="totalLaunches" name="totalLaunches" radius={[0, 4, 4, 0]} maxBarSize={30}>
-                  {regions.map((entry, idx) => (
+                  {data.regions.map((entry, idx) => (
                     <Cell key={idx} fill={CHART_PALETTE[idx % CHART_PALETTE.length]} />
                   ))}
                 </Bar>
@@ -191,7 +164,7 @@ export default function GeoBucketsPage() {
       <DataTable
         title="Geo Launch Buckets"
         columns={GEO_TABLE_COLUMNS}
-        rows={geoBuckets}
+        rows={data.geoBuckets}
         searchable
         maxHeight={400}
         searchFields={['ipAddress', 'country', 'region', 'city', 'deliveryRegion', 'seriesName']}

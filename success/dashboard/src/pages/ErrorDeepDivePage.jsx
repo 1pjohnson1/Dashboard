@@ -41,7 +41,7 @@ export default function ErrorDeepDivePage() {
       setLoading(true);
       setError(null);
       const result = await fetchErrorDeepDive(7);
-      setData(result?.data || result);
+      setData(result);
     } catch (err) {
       setError(err.message || 'Failed to load error data');
     } finally {
@@ -70,21 +70,10 @@ export default function ErrorDeepDivePage() {
     );
   }
 
-  const errorRateByConsumer = data?.errorRateByConsumer || [];
-  const errorTrend = data?.errorTrend || [];
-  const recentErrors = data?.recentErrors || data?.activeErrors || [];
-  const errorsByType = data?.errorsByType || [];
-  const periodDays = data?.periodDays || 7;
-  const thresholdBreached = Boolean(data?.thresholdBreached);
-  const breachedConsumers = data?.breachedConsumers || [];
-
-  const totalErrors = data?.summary?.totalActiveErrors
-    ?? errorRateByConsumer.reduce((sum, c) => sum + (c.totalErrors || 0), 0)
-    ?? recentErrors.length;
-
-  const avgErrorRate = errorRateByConsumer.length > 0
-    ? (errorRateByConsumer.reduce((sum, c) => sum + (c.errorRate || 0), 0) / errorRateByConsumer.length).toFixed(2)
-    : '0.00';
+  const totalErrors = data.errorRateByConsumer.reduce((sum, c) => sum + c.totalErrors, 0);
+  const avgErrorRate = data.errorRateByConsumer.length > 0
+    ? (data.errorRateByConsumer.reduce((sum, c) => sum + c.errorRate, 0) / data.errorRateByConsumer.length).toFixed(2)
+    : 0;
 
   return (
     <Box>
@@ -92,7 +81,7 @@ export default function ErrorDeepDivePage() {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
           <Typography variant="h4" sx={{ color: '#fff' }}>Error Deep Dive</Typography>
-          <Typography variant="subtitle1">Last {periodDays} days — Error analysis by consumer, type, and trend</Typography>
+          <Typography variant="subtitle1">Last {data.periodDays} days — Error analysis by consumer, type, and trend</Typography>
         </Box>
         <Button size="small" startIcon={<RefreshIcon />} onClick={loadData}>Refresh</Button>
       </Box>
@@ -101,8 +90,8 @@ export default function ErrorDeepDivePage() {
       <AlertBanner
         message="Error rate threshold breached (>2%) for one or more API consumers"
         severity="error"
-        details={breachedConsumers}
-        visible={thresholdBreached}
+        details={data.breachedConsumers}
+        visible={data.thresholdBreached}
       />
 
       {/* KPI Cards */}
@@ -111,7 +100,7 @@ export default function ErrorDeepDivePage() {
           <KpiCard
             title="Total Errors"
             value={totalErrors.toLocaleString()}
-            subtitle={`Across ${errorRateByConsumer.length} consumers`}
+            subtitle={`Across ${data.errorRateByConsumer.length} consumers`}
             icon={<BugReportIcon />}
             color={CHART_COLORS.error}
           />
@@ -128,7 +117,7 @@ export default function ErrorDeepDivePage() {
         <Grid item xs={12} sm={4}>
           <KpiCard
             title="Error Types"
-            value={errorsByType.length}
+            value={data.errorsByType.length}
             subtitle="Unique categories"
             icon={<BugReportIcon />}
             color={CHART_COLORS.secondary}
@@ -142,7 +131,7 @@ export default function ErrorDeepDivePage() {
         <Grid item xs={12} lg={7}>
           <ChartCard title="Error Rate by API Consumer" subtitle="Red dashed line = 2% threshold" height={300}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={errorRateByConsumer} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+              <BarChart data={data.errorRateByConsumer} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
                 <XAxis dataKey="apiConsumer" stroke="#546e7a" fontSize={10} angle={-15} textAnchor="end" height={60} />
                 <YAxis stroke="#546e7a" fontSize={11} unit="%" />
@@ -161,7 +150,7 @@ export default function ErrorDeepDivePage() {
         <Grid item xs={12} lg={5}>
           <ChartCard title="Daily Error Trend" subtitle="Error count by day" height={300}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={errorTrend} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+              <LineChart data={data.errorTrend} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
                 <XAxis dataKey="date" stroke="#546e7a" fontSize={11}
                   tickFormatter={(val) => val ? new Date(val).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
@@ -181,7 +170,7 @@ export default function ErrorDeepDivePage() {
       <DataTable
         title="Recent Errors"
         columns={ERROR_TABLE_COLUMNS}
-        rows={recentErrors}
+        rows={data.recentErrors}
         searchable
         maxHeight={400}
         searchFields={['labProfileName', 'errorType', 'errorMessage', 'apiConsumer', 'datacenterName']}

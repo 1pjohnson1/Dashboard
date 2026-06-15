@@ -34,7 +34,7 @@ export default function OverviewPage() {
       setLoading(true);
       setError(null);
       const result = await fetchOverviewMetrics(7);
-      setData(result?.data || result);
+      setData(result);
     } catch (err) {
       setError(err.message || 'Failed to load overview data');
     } finally {
@@ -70,9 +70,6 @@ export default function OverviewPage() {
     const d = new Date(val);
     return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:00`;
   };
-
-  const avgLatencyLabel = data?.avgLatencyMs == null ? 'N/A' : `${data.avgLatencyMs} ms`;
-  const avgStartupLabel = data?.avgStartupDuration == null ? 'Startup: N/A' : `Startup: ${data.avgStartupDuration}s avg`;
 
   return (
     <Box>
@@ -111,8 +108,8 @@ export default function OverviewPage() {
         <Grid item xs={12} sm={6} md={3}>
           <KpiCard
             title="Avg Latency"
-            value={avgLatencyLabel}
-            subtitle={avgStartupLabel}
+            value={`${data.avgLatencyMs} ms`}
+            subtitle={`Startup: ${data.avgStartupDuration}s avg`}
             icon={<SpeedIcon />}
             color={CHART_COLORS.secondary}
           />

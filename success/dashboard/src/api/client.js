@@ -51,7 +51,6 @@ apiClient.interceptors.response.use(
 
 // ─── API Functions ────────────────────────────────────────────────────────
 
-// Legacy endpoints (PascalCase for backward compatibility)
 export const fetchOverviewMetrics = (days = 7) =>
   apiClient.get(`/GetOverviewMetrics?days=${days}`);
 
@@ -66,36 +65,5 @@ export const fetchGeoBucketAnalysis = (region = 'all', days = 7) =>
 
 export const fetchRefreshStatus = () =>
   apiClient.get('/GetRefreshStatus');
-
-// New v3 schema endpoints (camelCase)
-export const getDatacenterHealth = (datacenterName = null, hoursBack = 24) => {
-  let url = `/getDatacenterHealth?hoursBack=${hoursBack}`;
-  if (datacenterName) url += `&datacenterName=${encodeURIComponent(datacenterName)}`;
-  return apiClient.get(url);
-};
-
-export const getLabProfileHealth = (labProfileName = null, hoursBack = 24) => {
-  let url = `/getLabProfileHealth?hoursBack=${hoursBack}`;
-  if (labProfileName) url += `&labProfileName=${encodeURIComponent(labProfileName)}`;
-  return apiClient.get(url);
-};
-
-export const getActiveErrors = (hoursBack = 4) =>
-  apiClient.get(`/getActiveErrors?hoursBack=${hoursBack}`);
-
-export const getErrorDetails = (labInstanceId = null, hoursBack = 4) => {
-  let url = `/getErrorDetails?hoursBack=${hoursBack}`;
-  if (labInstanceId) url += `&labInstanceId=${labInstanceId}`;
-  return apiClient.get(url);
-};
-
-export const getGeoInsights = () =>
-  apiClient.get('/getGeoInsights');
-
-export const getCompletionBreakdown = (hoursBack = 24) =>
-  apiClient.get(`/getCompletionBreakdown?hoursBack=${hoursBack}`);
-
-export const getVpnSuspects = (hoursBack = 24) =>
-  apiClient.get(`/getVpnSuspects?hoursBack=${hoursBack}`);
 
 export default apiClient;

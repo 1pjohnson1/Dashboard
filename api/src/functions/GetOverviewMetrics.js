@@ -7,84 +7,94 @@ app.http('GetOverviewMetrics', {
     handler: async (request, context) => {
         try {
             const days = parseInt(request.query.get('days') || '7', 10);
-            const cutoff = new Date(Date.now() - days * 86400 * 1000);
+            const safeDays = Number.isFinite(days) ? Math.max(1, Math.min(days, 30)) : 7;
 
-            const totalResult = await executeQuery(
-                `SELECT COUNT(*) AS TotalInstances,
-                        AVG(CAST(StartupDuration AS FLOAT)) AS AvgStartupDuration,
-                        AVG(CAST(TotalRunTime    AS FLOAT)) AS AvgRunTime,
-                        AVG(CAST(TimeInSession   AS FLOAT)) AS AvgTimeInSession,
-                        SUM(ErrorCount)                     AS TotalErrors,
-                        AVG(CAST(TaskCompletePercent AS FLOAT)) AS AvgTaskComplete,
-                        SUM(CASE WHEN ExamPassed = 1 THEN 1 ELSE 0 END) AS ExamsPassed,
-                        SUM(CASE WHEN IsExam = 1 THEN 1 ELSE 0 END)     AS TotalExams
+            const sinceEpochQuery = `
+                DATEDIFF(SECOND, '1970-01-01', DATEADD(DAY, -${safeDays}, SYSUTCDATETIME()))
+            `;
+
+            // KPI summary from normalized table.
+            const overview = await executeQuery(`
+                SELECT
+                    COUNT(*) AS TotalInstances,
+                    SUM(CASE WHEN CompletionStatus = 'Complete' THEN 1 ELSE 0 END) AS CompletedInstances,
+                    SUM(CASE WHEN [State] IN ('Started','Resumed') AND EndDateTime IS NULL THEN 1 ELSE 0 END) AS ActiveLabsNow,
+                    AVG(CAST(CASE WHEN Latency IS NOT NULL THEN Latency * 1000.0 END AS FLOAT)) AS AvgLatencyMs,
+                    AVG(CAST(CASE WHEN StartupDuration IS NOT NULL THEN StartupDuration END AS FLOAT)) AS AvgStartupDuration,
+                    SUM(CASE WHEN ErrorCount > 0 OR [Error] IS NOT NULL THEN 1 ELSE 0 END) AS ErrorInstances
+                FROM dbo.tblInstances
+                WHERE [Start] >= ${sinceEpochQuery}
+            `);
+
+            // Hourly launches and error trend for chart.
+            const latencyTrend = await executeQuery(
+                `SELECT 
+                    DATEADD(HOUR, DATEDIFF(HOUR, 0, DATEADD(SECOND, [Start], '1970-01-01T00:00:00Z')), 0) AS HourBucket,
+                    COUNT(*) AS Launches,
+                    SUM(CASE WHEN ErrorCount > 0 OR [Error] IS NOT NULL THEN 1 ELSE 0 END) AS Errors
                  FROM dbo.tblInstances
-                 WHERE StartDateTime >= @cutoff`,
-                [{ name: 'cutoff', type: TYPES.DateTime2, value: cutoff }]
+                 WHERE [Start] >= ${sinceEpochQuery}
+                 GROUP BY DATEADD(HOUR, DATEDIFF(HOUR, 0, DATEADD(SECOND, [Start], '1970-01-01T00:00:00Z')), 0)
+                 ORDER BY HourBucket ASC`
             );
 
-            const byState = await executeQuery(
-                `SELECT State, COUNT(*) AS Count
-                 FROM dbo.tblInstances
-                 WHERE StartDateTime >= @cutoff
-                 GROUP BY State
-                 ORDER BY Count DESC`,
-                [{ name: 'cutoff', type: TYPES.DateTime2, value: cutoff }]
-            );
+            // Completion status distribution for pie chart.
+            const statusBreakdown = await executeQuery(`
+                SELECT 
+                    ISNULL(NULLIF(CompletionStatus, ''), 'Unknown') AS [Status],
+                    COUNT(*) AS [Count]
+                FROM dbo.tblInstances
+                WHERE [Start] >= ${sinceEpochQuery}
+                GROUP BY ISNULL(NULLIF(CompletionStatus, ''), 'Unknown')
+                ORDER BY [Count] DESC
+            `);
 
-            const topLabs = await executeQuery(
-                `SELECT TOP 10 LabProfileId, LabProfileName, COUNT(*) AS Count
-                 FROM dbo.tblInstances
-                 WHERE StartDateTime >= @cutoff
-                 GROUP BY LabProfileId, LabProfileName
-                 ORDER BY Count DESC`,
-                [{ name: 'cutoff', type: TYPES.DateTime2, value: cutoff }]
-            );
+            const summary = overview[0] || {};
+            const totalInstances = summary.TotalInstances || 0;
+            const completedInstances = summary.CompletedInstances || 0;
+            const successRate = totalInstances > 0
+                ? Number(((completedInstances * 100.0) / totalInstances).toFixed(1))
+                : 0;
 
-            const dailyTrend = await executeQuery(
-                `SELECT CONVERT(DATE, StartDateTime) AS Day, COUNT(*) AS Count
-                 FROM dbo.tblInstances
-                 WHERE StartDateTime >= @cutoff
-                 GROUP BY CONVERT(DATE, StartDateTime)
-                 ORDER BY Day`,
-                [{ name: 'cutoff', type: TYPES.DateTime2, value: cutoff }]
-            );
+            const launchesOverTime = latencyTrend.map((row) => ({
+                hour: row.HourBucket,
+                launches: row.Launches || 0,
+                errors: row.Errors || 0,
+            }));
 
-            const summary = totalResult[0];
-            const errorRate = summary.TotalInstances
-                ? ((summary.TotalErrors / summary.TotalInstances) * 100).toFixed(2)
-                : '0.00';
+            const chartStatusBreakdown = statusBreakdown.map((row) => ({
+                status: row.Status,
+                count: row.Count || 0,
+            }));
 
             return {
                 status: 200,
                 jsonBody: {
-                    totalInstances:    summary.TotalInstances || 0,
-                    successRate:       summary.TotalInstances
-                                           ? parseFloat(((1 - (summary.TotalErrors || 0) / summary.TotalInstances) * 100).toFixed(1))
-                                           : 100,
-                    completedInstances: (byState.find(s => s.State === 'Complete') || {}).Count || 0,
-                    avgLatency:        Math.round(summary.AvgStartupDuration || 0),
-                    activeLabsNow:     (byState.find(s => s.State === 'Building' || s.State === 'Running') || {}).Count || 0,
-                    totalErrors:       summary.TotalErrors || 0,
-                    errorRate:         parseFloat(errorRate),
-                    creationFailures:  (byState.find(s => s.State === 'Error') || {}).Count || 0,
-                    avgStartupDuration: Math.round(summary.AvgStartupDuration || 0),
-                    periodDays:        days,
-                    statusBreakdown:   byState.map(s => ({ status: s.State, count: s.Count })),
-                    topLabProfiles:    topLabs.map(l => ({ labProfileName: l.LabProfileName, count: l.Count })),
-                    launchesOverTime:  dailyTrend.map(d => ({ hour: d.Day, launches: d.Count, errors: 0 })),
-                },
+                    success: true,
+                    data: {
+                        periodDays: safeDays,
+                        totalInstances,
+                        completedInstances,
+                        successRate,
+                        avgLatencyMs: summary.AvgLatencyMs != null ? Number(summary.AvgLatencyMs.toFixed(1)) : null,
+                        avgStartupDuration: summary.AvgStartupDuration != null ? Number(summary.AvgStartupDuration.toFixed(1)) : null,
+                        activeLabsNow: summary.ActiveLabsNow || 0,
+                        errorInstances: summary.ErrorInstances || 0,
+                        launchesOverTime,
+                        statusBreakdown: chartStatusBreakdown,
+                        timestamp: new Date().toISOString()
+                    }
+                }
             };
         } catch (error) {
             context.error('GetOverviewMetrics error:', error);
             return {
                 status: 500,
                 jsonBody: {
-                    error:   error.message || 'Internal server error',
-                    code:    error.code || 'UNKNOWN',
-                    details: JSON.stringify(error),
-                },
+                    success: false,
+                    error: error.message || 'Internal server error'
+                }
             };
         }
-    },
+    }
 });

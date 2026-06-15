@@ -1,75 +1,72 @@
 const { app } = require('@azure/functions');
-const { executeQuery, TYPES } = require('../shared/sql.js');
+const { executeQuery } = require('../shared/sql.js');
 
 app.http('GetGeoBucketAnalysis', {
     methods: ['GET'],
     authLevel: 'anonymous',
     handler: async (request, context) => {
         try {
-            const days   = parseInt(request.query.get('days') || '7', 10);
-            const region = request.query.get('region') || 'all';
-            const cutoff = new Date(Date.now() - days * 86400 * 1000);
+            // Get detailed geo insights
+            const geoData = await executeQuery(`
+                SELECT 
+                    Country, Region, City, Latitude, Longitude,
+                    InstanceCount, ErrorCount, ErrorRatePct,
+                    AvgCompletionPct, AvgLatencyMs, PossibleVpnCount
+                FROM dbo.vw_GeoInsights
+                ORDER BY InstanceCount DESC
+            `);
 
-            const regionFilter = region !== 'all' ? 'AND Region = @region' : '';
-            const regionParam  = region !== 'all'
-                ? [{ name: 'region', type: TYPES.NVarChar, value: region }]
-                : [];
-            const params = [{ name: 'cutoff', type: TYPES.DateTime2, value: cutoff }, ...regionParam];
+            // Get VPN suspects detail
+            const vpnSuspects = await executeQuery(`
+                SELECT 
+                    Id, LabProfileName, IpAddress, PublicIpAddresses,
+                    Country, Region, City, BrowserUserAgent,
+                    UserEmail, UserFirstName, UserLastName,
+                    StartDateTime, [State], CompletionStatus
+                FROM dbo.vw_VpnDetection
+                ORDER BY StartDateTime DESC
+            `);
 
-            const byCountry = await executeQuery(
-                `SELECT Country, COUNT(*) AS Count,
-                        AVG(Latitude) AS AvgLat, AVG(Longitude) AS AvgLng
-                 FROM dbo.tblInstances
-                 WHERE StartDateTime >= @cutoff AND Country IS NOT NULL ${regionFilter}
-                 GROUP BY Country
-                 ORDER BY Count DESC`,
-                params
-            );
-
-            const byRegion = await executeQuery(
-                `SELECT Country, Region, COUNT(*) AS Count
-                 FROM dbo.tblInstances
-                 WHERE StartDateTime >= @cutoff AND Region IS NOT NULL ${regionFilter}
-                 GROUP BY Country, Region
-                 ORDER BY Count DESC`,
-                params
-            );
-
-            const byCity = await executeQuery(
-                `SELECT TOP 50 Country, Region, City, COUNT(*) AS Count,
-                        AVG(Latitude) AS Lat, AVG(Longitude) AS Lng
-                 FROM dbo.tblInstances
-                 WHERE StartDateTime >= @cutoff AND City IS NOT NULL
-                       AND Latitude IS NOT NULL AND Longitude IS NOT NULL ${regionFilter}
-                 GROUP BY Country, Region, City
-                 ORDER BY Count DESC`,
-                params
-            );
-
-            const regions = await executeQuery(
-                `SELECT DISTINCT Region
-                 FROM dbo.tblInstances
-                 WHERE StartDateTime >= @cutoff AND Region IS NOT NULL
-                 ORDER BY Region`,
-                [{ name: 'cutoff', type: TYPES.DateTime2, value: cutoff }]
-            );
+            const byCountry = {};
+            geoData.forEach(row => {
+                if (!byCountry[row.Country]) {
+                    byCountry[row.Country] = {
+                        country: row.Country,
+                        instances: 0,
+                        errors: 0
+                    };
+                }
+                byCountry[row.Country].instances += row.InstanceCount;
+                byCountry[row.Country].errors += row.ErrorCount;
+            });
 
             return {
                 status: 200,
                 jsonBody: {
-                    byCountry,
-                    byRegion,
-                    byCity,
-                    availableRegions: regions.map(r => r.Region),
-                    days,
-                    region,
-                    regions:    byRegion.map(r => ({ region: r.Region, totalLaunches: r.Count, errorRate: 0, avgLatency: 0 })),
-                    geoBuckets: byCity.map(c => ({ ipAddress: '', country: c.Country, region: c.City, launchCount: c.Count, seriesName: '' })),
-                },
+                    success: true,
+                    data: {
+                        detailedLocations: geoData,
+                        byCountry: Object.values(byCountry),
+                        vpnSuspects: vpnSuspects,
+                        summary: {
+                            totalLocations: geoData.length,
+                            totalInstances: geoData.reduce((sum, r) => sum + r.InstanceCount, 0),
+                            totalErrors: geoData.reduce((sum, r) => sum + r.ErrorCount, 0),
+                            vpnFlagsCount: vpnSuspects.length
+                        }
+                    },
+                    timestamp: new Date().toISOString()
+                }
             };
         } catch (error) {
             context.error('GetGeoBucketAnalysis error:', error);
-            return { status: 500, jsonBody: { error: error.message || 'Internal server error' } };
+            return {
+                status: 500,
+                jsonBody: { 
+                    success: false,
+                    error: error.message || 'Internal server error' 
+                }
+            };
         }
-    },
+    }
 });

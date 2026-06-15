@@ -37,7 +37,7 @@ export default function ConcurrentLaunchesPage() {
       setLoading(true);
       setError(null);
       const result = await fetchConcurrentLaunches(24);
-      setData(result?.data || result);
+      setData(result);
     } catch (err) {
       setError(err.message || 'Failed to load concurrent launch data');
     } finally {
@@ -66,27 +66,13 @@ export default function ConcurrentLaunchesPage() {
     );
   }
 
-  const summary = data?.summary || {};
-  const windows = data?.windows || (data?.hourlyLaunches || []).map((row, idx) => ({
-    id: idx,
-    region: 'All',
-    windowStart: row.HourBucket,
-    windowEnd: null,
-    concurrentCount: row.LaunchCount || 0,
-    thresholdBreached: (row.LaunchCount || 0) > 4,
-  }));
-  const byRegion = data?.byRegion || [{ region: 'All', maxConcurrent: summary.peakConcurrentEstimate || 0 }];
-  const maxConcurrent = data?.maxConcurrent ?? summary.peakConcurrentEstimate ?? 0;
-  const periodHours = data?.periodHours ?? summary.periodHours ?? 24;
-  const thresholdBreached = data?.thresholdBreached ?? windows.some((w) => w.thresholdBreached);
-
   const formatTime = (val) => {
     if (!val) return '';
     const d = new Date(val);
     return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
   };
 
-  const breachedWindows = windows.filter((w) => w.thresholdBreached);
+  const breachedWindows = data.windows.filter(w => w.thresholdBreached);
 
   return (
     <Box>
@@ -94,19 +80,19 @@ export default function ConcurrentLaunchesPage() {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
           <Typography variant="h4" sx={{ color: '#fff' }}>Concurrent Launches</Typography>
-          <Typography variant="subtitle1">Last {periodHours} hours — 5-minute window analysis</Typography>
+          <Typography variant="subtitle1">Last {data.periodHours} hours — 5-minute window analysis</Typography>
         </Box>
         <Button size="small" startIcon={<RefreshIcon />} onClick={loadData}>Refresh</Button>
       </Box>
 
       {/* Threshold Alert */}
       <AlertBanner
-        message={`Concurrent launch threshold breached (>4) — Max: ${maxConcurrent} simultaneous launches`}
+        message={`Concurrent launch threshold breached (>4) — Max: ${data.maxConcurrent} simultaneous launches`}
         severity="warning"
         details={breachedWindows.slice(0, 5).map(w =>
           `${w.region}: ${w.concurrentCount} at ${new Date(w.windowStart).toLocaleTimeString()}`
         )}
-        visible={thresholdBreached}
+        visible={data.thresholdBreached}
       />
 
       {/* KPI Cards */}
@@ -114,10 +100,10 @@ export default function ConcurrentLaunchesPage() {
         <Grid item xs={12} sm={4}>
           <KpiCard
             title="Max Concurrent"
-            value={maxConcurrent}
-            subtitle={thresholdBreached ? '⚠️ Above threshold' : '✅ Within threshold'}
+            value={data.maxConcurrent}
+            subtitle={data.thresholdBreached ? '⚠️ Above threshold' : '✅ Within threshold'}
             icon={<GroupsIcon />}
-            color={thresholdBreached ? CHART_COLORS.warning : CHART_COLORS.success}
+            color={data.thresholdBreached ? CHART_COLORS.warning : CHART_COLORS.success}
           />
         </Grid>
         <Grid item xs={12} sm={4}>
@@ -132,7 +118,7 @@ export default function ConcurrentLaunchesPage() {
         <Grid item xs={12} sm={4}>
           <KpiCard
             title="Regions Monitored"
-            value={byRegion.length}
+            value={data.byRegion.length}
             subtitle="Active delivery regions"
             icon={<GroupsIcon />}
             color={CHART_COLORS.info}
@@ -146,7 +132,7 @@ export default function ConcurrentLaunchesPage() {
         <Grid item xs={12} lg={7}>
           <ChartCard title="Concurrent Launches Over Time" subtitle="5-minute windows — dashed line = threshold (4)" height={320}>
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={windows} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+              <AreaChart data={data.windows} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                 <defs>
                   <linearGradient id="concurrentGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor={CHART_COLORS.primary} stopOpacity={0.3} />
@@ -171,7 +157,7 @@ export default function ConcurrentLaunchesPage() {
         <Grid item xs={12} lg={5}>
           <ChartCard title="Max Concurrent by Region" height={320}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={byRegion} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+              <BarChart data={data.byRegion} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
                 <XAxis type="number" stroke="#546e7a" fontSize={11} />
                 <YAxis dataKey="region" type="category" stroke="#546e7a" fontSize={10} width={140} />
@@ -179,7 +165,7 @@ export default function ConcurrentLaunchesPage() {
                   contentStyle={{ backgroundColor: '#16213e', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: '0.8rem' }}
                 />
                 <Bar dataKey="maxConcurrent" radius={[0, 4, 4, 0]} maxBarSize={30}>
-                  {byRegion.map((entry, idx) => (
+                  {data.byRegion.map((entry, idx) => (
                     <Cell key={idx} fill={CHART_PALETTE[idx % CHART_PALETTE.length]} />
                   ))}
                 </Bar>
@@ -193,7 +179,7 @@ export default function ConcurrentLaunchesPage() {
       <DataTable
         title="Launch Windows"
         columns={WINDOW_TABLE_COLUMNS}
-        rows={windows}
+        rows={data.windows}
         searchable
         maxHeight={400}
       />

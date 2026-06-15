@@ -16,7 +16,7 @@ const NAV_ITEMS = [
   { label: 'Overview & Health', path: '/', icon: <DashboardIcon /> },
   { label: 'Error Deep Dive', path: '/errors', icon: <BugReportIcon /> },
   { label: 'Concurrent Launches', path: '/concurrent', icon: <RocketLaunchIcon /> },
-  { label: 'Geo Insights', path: '/geo', icon: <PublicIcon /> },
+  { label: 'Geo Intelligence', path: '/geo', icon: <PublicIcon /> },
 ];
 
 function formatRefreshTime(isoString) {

@@ -1,0 +1,51 @@
+{
+    "linkedServiceName": {
+        "referenceName": "ls_AzureSql",
+        "type": "LinkedServiceReference"
+    },
+    "annotations": [],
+    "type": "AzureSqlTable",
+    "typeProperties": {
+        "schema": "dbo",
+        "table": "tblGeoBuckets"
+    },
+    "schema": [
+        {
+            "name": "InstanceId",
+            "type": "int",
+            "precision": 10
+        },
+        {
+            "name": "IpAddress",
+            "type": "nvarchar"
+        },
+        {
+            "name": "Country",
+            "type": "nvarchar"
+        },
+        {
+            "name": "Region",
+            "type": "nvarchar"
+        },
+        {
+            "name": "City",
+            "type": "nvarchar"
+        },
+        {
+            "name": "Latitude",
+            "type": "float",
+            "precision": 15
+        },
+        {
+            "name": "Longitude",
+            "type": "float",
+            "precision": 15
+        },
+        {
+            "name": "IngestTimestamp",
+            "type": "datetime2",
+            "precision": 27,
+            "scale": 7
+        }
+    ]
+}
