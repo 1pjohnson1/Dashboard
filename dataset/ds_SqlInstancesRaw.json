@@ -1,0 +1,13 @@
+{
+    "linkedServiceName": {
+        "referenceName": "ls_AzureSql",
+        "type": "LinkedServiceReference"
+    },
+    "annotations": [],
+    "type": "AzureSqlTable",
+    "typeProperties": {
+        "schema": "dbo",
+        "table": "tblInstancesRaw"
+    },
+    "schema": []
+}

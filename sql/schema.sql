@@ -42,6 +42,13 @@ CREATE TABLE dbo.tblInstances (
     LastLatency         INT             NULL,
     ErrorCount          INT             NOT NULL DEFAULT 0,
     StartupDuration     INT             NULL,
+    EstimatedReadySeconds INT           NULL,
+    -- Provisioning latency: how much longer the lab actually took to become
+    -- ready vs. the API's estimate. Positive = slower than estimated.
+    ProvisioningLatency AS (CASE WHEN StartupDuration IS NOT NULL
+                                  AND EstimatedReadySeconds IS NOT NULL
+                                 THEN StartupDuration - EstimatedReadySeconds
+                            END),
     TotalRunTime        INT             NULL,
     TimeInSession       INT             NULL,
     TaskCompletePercent FLOAT           NULL,
@@ -73,6 +80,14 @@ CREATE TABLE dbo.tblErrors (
     SeriesName          NVARCHAR(255)   NULL,
     DatacenterName      NVARCHAR(255)   NULL,
     LabHostName         NVARCHAR(255)   NULL,
+    -- insight columns
+    DeliveryRegionName  NVARCHAR(255)   NULL,
+    Country             NVARCHAR(100)   NULL,
+    City                NVARCHAR(100)   NULL,
+    State               NVARCHAR(50)    NULL,
+    PlatformId          INT             NULL,
+    IsExam              BIT             NULL,
+    StartupDuration     INT             NULL,
     IngestTimestamp     DATETIME2(3)    NOT NULL DEFAULT SYSUTCDATETIME(),
 
     CONSTRAINT PK_tblErrors PRIMARY KEY CLUSTERED (ErrorId),
@@ -93,6 +108,15 @@ CREATE TABLE dbo.tblActivities (
     PossibleScore       FLOAT           NULL,
     PassStatus          NVARCHAR(50)    NULL,
     Duration            INT             NULL,
+    -- insight columns
+    LabProfileId        INT             NULL,
+    LabProfileName      NVARCHAR(500)   NULL,
+    SeriesId            INT             NULL,
+    SeriesName          NVARCHAR(255)   NULL,
+    ApiConsumer         NVARCHAR(255)   NULL,
+    ScorePercent        AS (CASE WHEN PossibleScore > 0
+                                 THEN CAST(Score / PossibleScore * 100 AS DECIMAL(5,2))
+                            END),
     IngestTimestamp     DATETIME2(3)    NOT NULL DEFAULT SYSUTCDATETIME(),
 
     CONSTRAINT PK_tblActivities PRIMARY KEY CLUSTERED (ActivityId),
@@ -114,6 +138,13 @@ CREATE TABLE dbo.tblGeoBuckets (
     InstanceCount       INT             NOT NULL DEFAULT 0,
     SeriesId            INT             NULL,
     SeriesName          NVARCHAR(255)   NULL,
+    -- insight columns
+    Latitude            FLOAT           NULL,
+    Longitude           FLOAT           NULL,
+    ErrorCount          INT             NULL,
+    AvgLatency          DECIMAL(10,2)   NULL,
+    AvgStartupDuration  DECIMAL(10,2)   NULL,
+    UniqueUsers         INT             NULL,
     BucketWindowStart   DATETIME2(3)    NOT NULL,
     BucketWindowEnd     DATETIME2(3)    NOT NULL,
     IngestTimestamp     DATETIME2(3)    NOT NULL DEFAULT SYSUTCDATETIME(),
@@ -290,9 +321,7 @@ SELECT
             ELSE 0
         END AS DECIMAL(5,2)
     )                                                               AS ErrorRate,
-    SUM(CASE WHEN ErrorCount > 0
-              AND CompletionStatus IS NULL
-              AND State IN ('Error', 'Off')
+    SUM(CASE WHEN CompletionStatus IN ('Lab Creation Failed', 'Storage Provisioning Failed', 'Lab Provisioning Failed')
              THEN 1 ELSE 0 END)                                    AS CreationFailures,
     CAST(AVG(CAST(StartupDuration AS FLOAT)) AS DECIMAL(10,2))    AS AvgStartupDuration
 FROM dbo.tblInstances;
@@ -440,6 +469,64 @@ GO
 -- Step 4: Drop the epoch-based index if it still exists
 IF EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_tblInstances_StartEpoch')
     DROP INDEX IX_tblInstances_StartEpoch ON dbo.tblInstances;
+GO
+
+-- Step 5: Add child-table insight columns on existing databases (idempotent)
+IF COL_LENGTH('dbo.tblErrors', 'DeliveryRegionName') IS NULL    ALTER TABLE dbo.tblErrors ADD DeliveryRegionName NVARCHAR(255) NULL;
+IF COL_LENGTH('dbo.tblErrors', 'Country') IS NULL
+    ALTER TABLE dbo.tblErrors ADD Country NVARCHAR(100) NULL;
+IF COL_LENGTH('dbo.tblErrors', 'City') IS NULL
+    ALTER TABLE dbo.tblErrors ADD City NVARCHAR(100) NULL;
+IF COL_LENGTH('dbo.tblErrors', 'State') IS NULL
+    ALTER TABLE dbo.tblErrors ADD State NVARCHAR(50) NULL;
+IF COL_LENGTH('dbo.tblErrors', 'PlatformId') IS NULL
+    ALTER TABLE dbo.tblErrors ADD PlatformId INT NULL;
+IF COL_LENGTH('dbo.tblErrors', 'IsExam') IS NULL
+    ALTER TABLE dbo.tblErrors ADD IsExam BIT NULL;
+IF COL_LENGTH('dbo.tblErrors', 'StartupDuration') IS NULL
+    ALTER TABLE dbo.tblErrors ADD StartupDuration INT NULL;
+GO
+
+IF COL_LENGTH('dbo.tblActivities', 'LabProfileId') IS NULL
+    ALTER TABLE dbo.tblActivities ADD LabProfileId INT NULL;
+IF COL_LENGTH('dbo.tblActivities', 'LabProfileName') IS NULL
+    ALTER TABLE dbo.tblActivities ADD LabProfileName NVARCHAR(500) NULL;
+IF COL_LENGTH('dbo.tblActivities', 'SeriesId') IS NULL
+    ALTER TABLE dbo.tblActivities ADD SeriesId INT NULL;
+IF COL_LENGTH('dbo.tblActivities', 'SeriesName') IS NULL
+    ALTER TABLE dbo.tblActivities ADD SeriesName NVARCHAR(255) NULL;
+IF COL_LENGTH('dbo.tblActivities', 'ApiConsumer') IS NULL
+    ALTER TABLE dbo.tblActivities ADD ApiConsumer NVARCHAR(255) NULL;
+GO
+IF COL_LENGTH('dbo.tblActivities', 'ScorePercent') IS NULL
+    ALTER TABLE dbo.tblActivities ADD ScorePercent AS (CASE WHEN PossibleScore > 0
+                                                            THEN CAST(Score / PossibleScore * 100 AS DECIMAL(5,2))
+                                                       END);
+GO
+
+IF COL_LENGTH('dbo.tblGeoBuckets', 'Latitude') IS NULL
+    ALTER TABLE dbo.tblGeoBuckets ADD Latitude FLOAT NULL;
+IF COL_LENGTH('dbo.tblGeoBuckets', 'Longitude') IS NULL
+    ALTER TABLE dbo.tblGeoBuckets ADD Longitude FLOAT NULL;
+IF COL_LENGTH('dbo.tblGeoBuckets', 'ErrorCount') IS NULL
+    ALTER TABLE dbo.tblGeoBuckets ADD ErrorCount INT NULL;
+IF COL_LENGTH('dbo.tblGeoBuckets', 'AvgLatency') IS NULL
+    ALTER TABLE dbo.tblGeoBuckets ADD AvgLatency DECIMAL(10,2) NULL;
+IF COL_LENGTH('dbo.tblGeoBuckets', 'AvgStartupDuration') IS NULL
+    ALTER TABLE dbo.tblGeoBuckets ADD AvgStartupDuration DECIMAL(10,2) NULL;
+IF COL_LENGTH('dbo.tblGeoBuckets', 'UniqueUsers') IS NULL
+    ALTER TABLE dbo.tblGeoBuckets ADD UniqueUsers INT NULL;
+GO
+
+-- Step 6: Add provisioning-latency columns on tblInstances (idempotent)
+IF COL_LENGTH('dbo.tblInstances', 'EstimatedReadySeconds') IS NULL
+    ALTER TABLE dbo.tblInstances ADD EstimatedReadySeconds INT NULL;
+GO
+IF COL_LENGTH('dbo.tblInstances', 'ProvisioningLatency') IS NULL
+    ALTER TABLE dbo.tblInstances ADD ProvisioningLatency AS (CASE WHEN StartupDuration IS NOT NULL
+                                                                   AND EstimatedReadySeconds IS NOT NULL
+                                                                  THEN StartupDuration - EstimatedReadySeconds
+                                                             END);
 GO
 
 PRINT 'Schema deployment complete.';

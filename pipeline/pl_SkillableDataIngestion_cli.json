@@ -48,6 +48,34 @@
             }
         },
         {
+            "name": "TruncateStaging",
+            "description": "Empty the transient tblInstancesRaw buffer before landing this run's pages, so re-runs and overlapping pages never accumulate duplicate rows.",
+            "type": "SqlServerStoredProcedure",
+            "dependsOn": [
+                {
+                    "activity": "SetApiKey",
+                    "dependencyConditions": [
+                        "Succeeded"
+                    ]
+                }
+            ],
+            "policy": {
+                "timeout": "0.00:05:00",
+                "retry": 1,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+            },
+            "userProperties": [],
+            "linkedServiceName": {
+                "referenceName": "ls_AzureSql",
+                "type": "LinkedServiceReference"
+            },
+            "typeProperties": {
+                "storedProcedureName": "dbo.usp_TruncateStaging"
+            }
+        },
+        {
             "name": "EnsureFirstPage",
             "description": "Retry the first-page call until the API returns TotalResults. The Skillable API intermittently returns an 'Execution Timeout Expired' body as HTTP 200, which ADF treats as success, so activity-level retry never fires. This Until loop retries until a valid response arrives.",
             "type": "Until",
@@ -209,13 +237,337 @@
             }
         },
         {
-            "name": "LogRefreshTime",
+            "name": "ForEachPage",
+            "type": "ForEach",
+            "dependsOn": [
+                {
+                    "activity": "BuildPageArray",
+                    "dependencyConditions": [
+                        "Succeeded"
+                    ]
+                },
+                {
+                    "activity": "TruncateStaging",
+                    "dependencyConditions": [
+                        "Succeeded"
+                    ]
+                }
+            ],
+            "userProperties": [],
+            "typeProperties": {
+                "items": {
+                    "value": "@variables('PageArray')",
+                    "type": "Expression"
+                },
+                "isSequential": true,
+                "activities": [
+                    {
+                        "name": "CopySearchResultsToSql",
+                        "description": "Dumb + fast landing: plain INSERT of every page into dbo.tblInstancesRaw. No per-row stored procedure, no transformation - immune to per-row timeouts. Nested arrays are serialized to JSON strings via mapComplexValuesToString.",
+                        "type": "Copy",
+                        "dependsOn": [],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 4,
+                            "retryIntervalInSeconds": 90,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "source": {
+                                "type": "RestSource",
+                                "httpRequestTimeout": "00:05:00",
+                                "requestInterval": "00.00:00:00.010",
+                                "additionalHeaders": {
+                                    "User-Agent": "AzureDataFactory/1.0",
+                                    "Accept": "application/json"
+                                },
+                                "requestMethod": "GET",
+                                "paginationRules": {
+                                    "supportRFC5988": "true"
+                                }
+                            },
+                            "sink": {
+                                "type": "AzureSqlSink",
+                                "writeBehavior": "insert",
+                                "sqlWriterUseTableLock": false,
+                                "disableMetricsCollection": false
+                            },
+                            "enableStaging": false,
+                            "translator": {
+                                "type": "TabularTranslator",
+                                "mapComplexValuesToString": true,
+                                "collectionReference": "$['Results']",
+                                "mappings": [
+                                    { "source": { "name": "Id", "type": "Int32" }, "sink": { "name": "Id", "type": "Int32" } },
+                                    { "source": { "name": "LabProfileId", "type": "Int32" }, "sink": { "name": "LabProfileId", "type": "Int32" } },
+                                    { "source": { "name": "LabProfileName", "type": "String" }, "sink": { "name": "LabProfileName", "type": "String" } },
+                                    { "source": { "name": "SeriesId", "type": "Int32" }, "sink": { "name": "SeriesId", "type": "Int32" } },
+                                    { "source": { "name": "SeriesName", "type": "String" }, "sink": { "name": "SeriesName", "type": "String" } },
+                                    { "source": { "name": "UserId", "type": "String" }, "sink": { "name": "UserId", "type": "String" } },
+                                    { "source": { "name": "UserFirstName", "type": "String" }, "sink": { "name": "UserFirstName", "type": "String" } },
+                                    { "source": { "name": "UserLastName", "type": "String" }, "sink": { "name": "UserLastName", "type": "String" } },
+                                    { "source": { "name": "UserEmail", "type": "String" }, "sink": { "name": "UserEmail", "type": "String" } },
+                                    { "source": { "name": "ClassId", "type": "String" }, "sink": { "name": "ClassId", "type": "String" } },
+                                    { "source": { "name": "ClassName", "type": "String" }, "sink": { "name": "ClassName", "type": "String" } },
+                                    { "source": { "name": "InstructorId", "type": "String" }, "sink": { "name": "InstructorId", "type": "String" } },
+                                    { "source": { "name": "InstructorName", "type": "String" }, "sink": { "name": "InstructorName", "type": "String" } },
+                                    { "source": { "name": "InstructorEmail", "type": "String" }, "sink": { "name": "InstructorEmail", "type": "String" } },
+                                    { "source": { "name": "PreinstanceStartTime", "type": "Int64" }, "sink": { "name": "PreinstanceStartTime", "type": "Int64" } },
+                                    { "source": { "name": "Start", "type": "Int64" }, "sink": { "name": "Start", "type": "Int64" } },
+                                    { "source": { "name": "End", "type": "Int64" }, "sink": { "name": "End", "type": "Int64" } },
+                                    { "source": { "name": "LastActivity", "type": "Int64" }, "sink": { "name": "LastActivity", "type": "Int64" } },
+                                    { "source": { "name": "Expires", "type": "Int64" }, "sink": { "name": "Expires", "type": "Int64" } },
+                                    { "source": { "name": "LastSave", "type": "Int64" }, "sink": { "name": "LastSave", "type": "Int64" } },
+                                    { "source": { "name": "SaveExpires", "type": "Int64" }, "sink": { "name": "SaveExpires", "type": "Int64" } },
+                                    { "source": { "name": "ExamScoredDate", "type": "Int64" }, "sink": { "name": "ExamScoredDate", "type": "Int64" } },
+                                    { "source": { "name": "StartTime", "type": "String" }, "sink": { "name": "StartTime", "type": "String" } },
+                                    { "source": { "name": "EndTime", "type": "String" }, "sink": { "name": "EndTime", "type": "String" } },
+                                    { "source": { "name": "LastActivityTime", "type": "String" }, "sink": { "name": "LastActivityTime", "type": "String" } },
+                                    { "source": { "name": "ExpiresTime", "type": "String" }, "sink": { "name": "ExpiresTime", "type": "String" } },
+                                    { "source": { "name": "LastSaveTime", "type": "String" }, "sink": { "name": "LastSaveTime", "type": "String" } },
+                                    { "source": { "name": "SaveExpiresTime", "type": "String" }, "sink": { "name": "SaveExpiresTime", "type": "String" } },
+                                    { "source": { "name": "ExamScoredTime", "type": "String" }, "sink": { "name": "ExamScoredTime", "type": "String" } },
+                                    { "source": { "name": "State", "type": "String" }, "sink": { "name": "State", "type": "String" } },
+                                    { "source": { "name": "CompletionStatus", "type": "String" }, "sink": { "name": "CompletionStatus", "type": "String" } },
+                                    { "source": { "name": "LastSaveTriggerType", "type": "String" }, "sink": { "name": "LastSaveTriggerType", "type": "String" } },
+                                    { "source": { "name": "PoolMemberName", "type": "String" }, "sink": { "name": "PoolMemberName", "type": "String" } },
+                                    { "source": { "name": "LabHostId", "type": "Int32" }, "sink": { "name": "LabHostId", "type": "Int32" } },
+                                    { "source": { "name": "LabHostName", "type": "String" }, "sink": { "name": "LabHostName", "type": "String" } },
+                                    { "source": { "name": "DatacenterId", "type": "Int32" }, "sink": { "name": "DatacenterId", "type": "Int32" } },
+                                    { "source": { "name": "DatacenterName", "type": "String" }, "sink": { "name": "DatacenterName", "type": "String" } },
+                                    { "source": { "name": "DeliveryRegionId", "type": "Int32" }, "sink": { "name": "DeliveryRegionId", "type": "Int32" } },
+                                    { "source": { "name": "DeliveryRegionName", "type": "String" }, "sink": { "name": "DeliveryRegionName", "type": "String" } },
+                                    { "source": { "name": "PlatformId", "type": "Int32" }, "sink": { "name": "PlatformId", "type": "Int32" } },
+                                    { "source": { "name": "CloudPlatformId", "type": "Int32" }, "sink": { "name": "CloudPlatformId", "type": "Int32" } },
+                                    { "source": { "name": "TimeInSession", "type": "Int32" }, "sink": { "name": "TimeInSession", "type": "Int32" } },
+                                    { "source": { "name": "TotalRunTime", "type": "Int32" }, "sink": { "name": "TotalRunTime", "type": "Int32" } },
+                                    { "source": { "name": "TimeRemaining", "type": "Int32" }, "sink": { "name": "TimeRemaining", "type": "Int32" } },
+                                    { "source": { "name": "StartupDuration", "type": "Int32" }, "sink": { "name": "StartupDuration", "type": "Int32" } },
+                                    { "source": { "name": "EstimatedReadySeconds", "type": "Int32" }, "sink": { "name": "EstimatedReadySeconds", "type": "Int32" } },
+                                    { "source": { "name": "LastLatency", "type": "Int32" }, "sink": { "name": "LastLatency", "type": "Int32" } },
+                                    { "source": { "name": "ErrorCount", "type": "String" }, "sink": { "name": "ErrorCount", "type": "String" } },
+                                    { "source": { "name": "HasContent", "type": "Boolean" }, "sink": { "name": "HasContent", "type": "Boolean" } },
+                                    { "source": { "name": "Task", "type": "String" }, "sink": { "name": "Task", "type": "String" } },
+                                    { "source": { "name": "Exercise", "type": "String" }, "sink": { "name": "Exercise", "type": "String" } },
+                                    { "source": { "name": "NumTasks", "type": "Int32" }, "sink": { "name": "NumTasks", "type": "Int32" } },
+                                    { "source": { "name": "NumCompletedTasks", "type": "Int32" }, "sink": { "name": "NumCompletedTasks", "type": "Int32" } },
+                                    { "source": { "name": "TaskCompletePercent", "type": "Double" }, "sink": { "name": "TaskCompletePercent", "type": "Double" } },
+                                    { "source": { "name": "IsExam", "type": "Boolean" }, "sink": { "name": "IsExam", "type": "Boolean" } },
+                                    { "source": { "name": "ExamPassed", "type": "Boolean" }, "sink": { "name": "ExamPassed", "type": "Boolean" } },
+                                    { "source": { "name": "ExamScore", "type": "Double" }, "sink": { "name": "ExamScore", "type": "Double" } },
+                                    { "source": { "name": "ExamMaxPossibleScore", "type": "Double" }, "sink": { "name": "ExamMaxPossibleScore", "type": "Double" } },
+                                    { "source": { "name": "ExamPassingScore", "type": "Double" }, "sink": { "name": "ExamPassingScore", "type": "Double" } },
+                                    { "source": { "name": "ExamScoredById", "type": "Int64" }, "sink": { "name": "ExamScoredById", "type": "Int64" } },
+                                    { "source": { "name": "ExamScoredByName", "type": "String" }, "sink": { "name": "ExamScoredByName", "type": "String" } },
+                                    { "source": { "name": "ExamDetails", "type": "String" }, "sink": { "name": "ExamDetails", "type": "String" } },
+                                    { "source": { "name": "ExamScaledScore", "type": "Double" }, "sink": { "name": "ExamScaledScore", "type": "Double" } },
+                                    { "source": { "name": "ExamPassingRawScore", "type": "Double" }, "sink": { "name": "ExamPassingRawScore", "type": "Double" } },
+                                    { "source": { "name": "ExamMaxPossibleRawScore", "type": "Double" }, "sink": { "name": "ExamMaxPossibleRawScore", "type": "Double" } },
+                                    { "source": { "name": "ExamMinScaledScore", "type": "Double" }, "sink": { "name": "ExamMinScaledScore", "type": "Double" } },
+                                    { "source": { "name": "ExamMaxScaledScore", "type": "Double" }, "sink": { "name": "ExamMaxScaledScore", "type": "Double" } },
+                                    { "source": { "name": "ExamCutoffScaledScore", "type": "Double" }, "sink": { "name": "ExamCutoffScaledScore", "type": "Double" } },
+                                    { "source": { "name": "IpAddress", "type": "String" }, "sink": { "name": "IpAddress", "type": "String" } },
+                                    { "source": { "name": "Country", "type": "String" }, "sink": { "name": "Country", "type": "String" } },
+                                    { "source": { "name": "Region", "type": "String" }, "sink": { "name": "Region", "type": "String" } },
+                                    { "source": { "name": "City", "type": "String" }, "sink": { "name": "City", "type": "String" } },
+                                    { "source": { "name": "Latitude", "type": "Double" }, "sink": { "name": "Latitude", "type": "Double" } },
+                                    { "source": { "name": "Longitude", "type": "Double" }, "sink": { "name": "Longitude", "type": "Double" } },
+                                    { "source": { "name": "MonitorUrl", "type": "String" }, "sink": { "name": "MonitorUrl", "type": "String" } },
+                                    { "source": { "name": "DetailsUrl", "type": "String" }, "sink": { "name": "DetailsUrl", "type": "String" } },
+                                    { "source": { "name": "ClientUrl", "type": "String" }, "sink": { "name": "ClientUrl", "type": "String" } },
+                                    { "source": { "name": "RemoteController", "type": "String" }, "sink": { "name": "RemoteController", "type": "String" } },
+                                    { "source": { "name": "Tag", "type": "String" }, "sink": { "name": "Tag", "type": "String" } },
+                                    { "source": { "name": "BrowserUserAgent", "type": "String" }, "sink": { "name": "BrowserUserAgent", "type": "String" } },
+                                    { "source": { "name": "InstructionsSetId", "type": "String" }, "sink": { "name": "InstructionsSetId", "type": "String" } },
+                                    { "source": { "name": "Language", "type": "String" }, "sink": { "name": "Language", "type": "String" } },
+                                    { "source": { "name": "ApiConsumerName", "type": "String" }, "sink": { "name": "ApiConsumer", "type": "String" } },
+                                    { "source": { "name": "Errors", "type": "String" }, "sink": { "name": "Errors", "type": "String" } },
+                                    { "source": { "name": "ActivityResults", "type": "String" }, "sink": { "name": "ActivityResults", "type": "String" } },
+                                    { "source": { "name": "ActivityGroupResults", "type": "String" }, "sink": { "name": "ActivityGroupResults", "type": "String" } },
+                                    { "source": { "name": "Skills", "type": "String" }, "sink": { "name": "Skills", "type": "String" } },
+                                    { "source": { "name": "Products", "type": "String" }, "sink": { "name": "Products", "type": "String" } },
+                                    { "source": { "name": "Sessions", "type": "String" }, "sink": { "name": "Sessions", "type": "String" } },
+                                    { "source": { "name": "Snapshots", "type": "String" }, "sink": { "name": "Snapshots", "type": "String" } },
+                                    { "source": { "name": "Notes", "type": "String" }, "sink": { "name": "Notes", "type": "String" } },
+                                    { "source": { "name": "PublicIpAddresses", "type": "String" }, "sink": { "name": "PublicIpAddresses", "type": "String" } },
+                                    { "source": { "name": "CloudCredentials", "type": "String" }, "sink": { "name": "CloudCredentials", "type": "String" } },
+                                    { "source": { "name": "CloudPortalCredentials", "type": "String" }, "sink": { "name": "CloudPortalCredentials", "type": "String" } },
+                                    { "source": { "name": "VirtualMachineCredentials", "type": "String" }, "sink": { "name": "VirtualMachineCredentials", "type": "String" } }
+                                ]
+                            }
+                        },
+                        "inputs": [
+                            {
+                                "referenceName": "ds_SkillableSearch",
+                                "type": "DatasetReference",
+                                "parameters": {
+                                    "relativeUrl": {
+                                        "value": "@concat('labinstance/search?start=', string(pipeline().parameters.StartEpoch), '&end=', string(pipeline().parameters.EndEpoch), '&pageIndex=', string(item()), '&pageSize=', string(pipeline().parameters.PageSize), '&sort=start%20desc&mode=10&api_key=', uriComponent(variables('ApiKeyVar')))",
+                                        "type": "Expression"
+                                    }
+                                }
+                            }
+                        ],
+                        "outputs": [
+                            {
+                                "referenceName": "ds_SqlInstancesRaw",
+                                "type": "DatasetReference",
+                                "parameters": {}
+                            }
+                        ]
+                    },
+                    {
+                        "name": "SkipTimedOutPage",
+                        "type": "Wait",
+                        "dependsOn": [
+                            {
+                                "activity": "CopySearchResultsToSql",
+                                "dependencyConditions": [
+                                    "Failed"
+                                ]
+                            }
+                        ],
+                        "userProperties": [],
+                        "typeProperties": {
+                            "waitTimeInSeconds": 1
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "name": "DistributeInstances",
+            "description": "Set-based MERGE of the staged raw rows into the curated dbo.tblInstances. Runs once after all pages are landed. Must complete before the child-table distributions (foreign keys).",
             "type": "SqlServerStoredProcedure",
             "dependsOn": [
                 {
                     "activity": "ForEachPage",
                     "dependencyConditions": [
                         "Completed"
+                    ]
+                }
+            ],
+            "policy": {
+                "timeout": "0.00:30:00",
+                "retry": 2,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+            },
+            "userProperties": [],
+            "linkedServiceName": {
+                "referenceName": "ls_AzureSql",
+                "type": "LinkedServiceReference"
+            },
+            "typeProperties": {
+                "storedProcedureName": "dbo.usp_DistributeInstances"
+            }
+        },
+        {
+            "name": "DistributeErrors",
+            "description": "Shred raw Errors[] JSON into dbo.tblErrors. Runs in parallel with DistributeActivities and UpdateGeoBuckets after instances are loaded.",
+            "type": "SqlServerStoredProcedure",
+            "dependsOn": [
+                {
+                    "activity": "DistributeInstances",
+                    "dependencyConditions": [
+                        "Succeeded"
+                    ]
+                }
+            ],
+            "policy": {
+                "timeout": "0.00:30:00",
+                "retry": 2,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+            },
+            "userProperties": [],
+            "linkedServiceName": {
+                "referenceName": "ls_AzureSql",
+                "type": "LinkedServiceReference"
+            },
+            "typeProperties": {
+                "storedProcedureName": "dbo.usp_DistributeErrors"
+            }
+        },
+        {
+            "name": "DistributeActivities",
+            "description": "Shred raw ActivityResults[] / ActivityGroupResults[] JSON into dbo.tblActivities. Runs in parallel with DistributeErrors and UpdateGeoBuckets after instances are loaded.",
+            "type": "SqlServerStoredProcedure",
+            "dependsOn": [
+                {
+                    "activity": "DistributeInstances",
+                    "dependencyConditions": [
+                        "Succeeded"
+                    ]
+                }
+            ],
+            "policy": {
+                "timeout": "0.00:30:00",
+                "retry": 2,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+            },
+            "userProperties": [],
+            "linkedServiceName": {
+                "referenceName": "ls_AzureSql",
+                "type": "LinkedServiceReference"
+            },
+            "typeProperties": {
+                "storedProcedureName": "dbo.usp_DistributeActivities"
+            }
+        },
+        {
+            "name": "UpdateGeoBuckets",
+            "description": "Rebuild geo-launch buckets for this window from the curated instances. Runs in parallel with DistributeErrors and DistributeActivities.",
+            "type": "SqlServerStoredProcedure",
+            "dependsOn": [
+                {
+                    "activity": "DistributeInstances",
+                    "dependencyConditions": [
+                        "Succeeded"
+                    ]
+                }
+            ],
+            "policy": {
+                "timeout": "0.00:30:00",
+                "retry": 2,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+            },
+            "userProperties": [],
+            "linkedServiceName": {
+                "referenceName": "ls_AzureSql",
+                "type": "LinkedServiceReference"
+            },
+            "typeProperties": {
+                "storedProcedureName": "dbo.usp_UpdateGeoBuckets",
+                "storedProcedureParameters": {
+                    "WindowStartEpoch": {
+                        "value": "@pipeline().parameters.StartEpoch",
+                        "type": "Int64"
+                    },
+                    "WindowEndEpoch": {
+                        "value": "@pipeline().parameters.EndEpoch",
+                        "type": "Int64"
+                    }
+                }
+            }
+        },
+        {
+            "name": "LogRefreshTime",
+            "description": "Record the data-freshness window (the API-call epoch range) shown on the dashboard 'Last Refresh' indicator.",
+            "type": "SqlServerStoredProcedure",
+            "dependsOn": [
+                {
+                    "activity": "DistributeInstances",
+                    "dependencyConditions": [
+                        "Succeeded"
                     ]
                 }
             ],
@@ -243,146 +595,6 @@
                         "type": "Int64"
                     }
                 }
-            }
-        },
-        {
-            "name": "ForEachPage",
-            "type": "ForEach",
-            "dependsOn": [
-                {
-                    "activity": "BuildPageArray",
-                    "dependencyConditions": [
-                        "Succeeded"
-                    ]
-                }
-            ],
-            "userProperties": [],
-            "typeProperties": {
-                "items": {
-                    "value": "@variables('PageArray')",
-                    "type": "Expression"
-                },
-                "isSequential": true,
-                "activities": [
-                    {
-                        "name": "CopySearchResultsToSql",
-                        "type": "Copy",
-                        "dependsOn": [],
-                        "policy": {
-                            "timeout": "0.12:00:00",
-                            "retry": 4,
-                            "retryIntervalInSeconds": 90,
-                            "secureOutput": false,
-                            "secureInput": false
-                        },
-                        "userProperties": [],
-                        "typeProperties": {
-                            "source": {
-                                "type": "RestSource",
-                                "httpRequestTimeout": "00:05:00",
-                                "requestInterval": "00.00:00:00.010",
-                                "additionalHeaders": {
-                                    "User-Agent": "AzureDataFactory/1.0",
-                                    "Accept": "application/json"
-                                },
-                                "requestMethod": "GET",
-                                "paginationRules": {
-                                    "supportRFC5988": "true"
-                                }
-                            },
-                            "sink": {
-                                "type": "AzureSqlSink",
-                                "sqlWriterStoredProcedureName": "dbo.usp_UpsertInstance",
-                                "sqlWriterTableType": "dbo.InstanceTableType",
-                                "storedProcedureTableTypeParameterName": "InstanceData",
-                                "writeBehavior": "insert",
-                                "sqlWriterUseTableLock": false,
-                                "disableMetricsCollection": false
-                            },
-                            "enableStaging": false,
-                            "translator": {
-                                "type": "TabularTranslator",
-                                "mapComplexValuesToString": false,
-                                "collectionReference": "$['Results']",
-                                "mappings": [
-                                    { "source": { "name": "Id", "type": "Int32" }, "sink": { "name": "InstanceId", "type": "Int32" } },
-                                    { "source": { "name": "LabProfileId", "type": "Int32" }, "sink": { "name": "LabProfileId", "type": "Int32" } },
-                                    { "source": { "name": "LabProfileName", "type": "String" }, "sink": { "name": "LabProfileName", "type": "String" } },
-                                    { "source": { "name": "SeriesId", "type": "Int32" }, "sink": { "name": "SeriesId", "type": "Int32" } },
-                                    { "source": { "name": "SeriesName", "type": "String" }, "sink": { "name": "SeriesName", "type": "String" } },
-                                    { "source": { "name": "UserId", "type": "String" }, "sink": { "name": "UserId", "type": "String" } },
-                                    { "source": { "name": "UserFirstName", "type": "String" }, "sink": { "name": "UserFirstName", "type": "String" } },
-                                    { "source": { "name": "UserLastName", "type": "String" }, "sink": { "name": "UserLastName", "type": "String" } },
-                                    { "source": { "name": "UserEmail", "type": "String" }, "sink": { "name": "UserEmail", "type": "String" } },
-                                    { "source": { "name": "ClassId", "type": "Int32" }, "sink": { "name": "ClassId", "type": "Int32" } },
-                                    { "source": { "name": "Start", "type": "Int64" }, "sink": { "name": "StartEpoch", "type": "Int64" } },
-                                    { "source": { "name": "End", "type": "Int64" }, "sink": { "name": "EndEpoch", "type": "Int64" } },
-                                    { "source": { "name": "LastActivity", "type": "Int64" }, "sink": { "name": "LastActivityEpoch", "type": "Int64" } },
-                                    { "source": { "name": "Expires", "type": "Int64" }, "sink": { "name": "ExpirationEpoch", "type": "Int64" } },
-                                    { "source": { "name": "State", "type": "String" }, "sink": { "name": "State", "type": "String" } },
-                                    { "source": { "name": "CompletionStatus", "type": "String" }, "sink": { "name": "CompletionStatus", "type": "String" } },
-                                    { "source": { "name": "IpAddress", "type": "String" }, "sink": { "name": "IpAddress", "type": "String" } },
-                                    { "source": { "name": "Country", "type": "String" }, "sink": { "name": "Country", "type": "String" } },
-                                    { "source": { "name": "Region", "type": "String" }, "sink": { "name": "Region", "type": "String" } },
-                                    { "source": { "name": "City", "type": "String" }, "sink": { "name": "City", "type": "String" } },
-                                    { "source": { "name": "Latitude", "type": "Double" }, "sink": { "name": "Latitude", "type": "Double" } },
-                                    { "source": { "name": "Longitude", "type": "Double" }, "sink": { "name": "Longitude", "type": "Double" } },
-                                    { "source": { "name": "DatacenterId", "type": "Int32" }, "sink": { "name": "DatacenterId", "type": "Int32" } },
-                                    { "source": { "name": "DatacenterName", "type": "String" }, "sink": { "name": "DatacenterName", "type": "String" } },
-                                    { "source": { "name": "LabHostId", "type": "Int32" }, "sink": { "name": "LabHostId", "type": "Int32" } },
-                                    { "source": { "name": "LabHostName", "type": "String" }, "sink": { "name": "LabHostName", "type": "String" } },
-                                    { "source": { "name": "DeliveryRegionName", "type": "String" }, "sink": { "name": "DeliveryRegionName", "type": "String" } },
-                                    { "source": { "name": "LastLatency", "type": "Int32" }, "sink": { "name": "LastLatency", "type": "Int32" } },
-                                    { "source": { "name": "ErrorCount", "type": "Int32" }, "sink": { "name": "ErrorCount", "type": "Int32" } },
-                                    { "source": { "name": "StartupDuration", "type": "Int32" }, "sink": { "name": "StartupDuration", "type": "Int32" } },
-                                    { "source": { "name": "TotalRunTime", "type": "Int32" }, "sink": { "name": "TotalRunTime", "type": "Int32" } },
-                                    { "source": { "name": "TimeInSession", "type": "Int32" }, "sink": { "name": "TimeInSession", "type": "Int32" } },
-                                    { "source": { "name": "TaskCompletePercent", "type": "Double" }, "sink": { "name": "TaskCompletePercent", "type": "Double" } },
-                                    { "source": { "name": "ExamPassed", "type": "Boolean" }, "sink": { "name": "ExamPassed", "type": "Boolean" } },
-                                    { "source": { "name": "ExamScore", "type": "Double" }, "sink": { "name": "ExamScore", "type": "Double" } },
-                                    { "source": { "name": "IsExam", "type": "Boolean" }, "sink": { "name": "IsExam", "type": "Boolean" } },
-                                    { "source": { "name": "PlatformId", "type": "Int32" }, "sink": { "name": "PlatformId", "type": "Int32" } },
-                                    { "source": { "name": "ApiConsumerName", "type": "String" }, "sink": { "name": "ApiConsumer", "type": "String" } }
-                                ]
-                            }
-                        },
-                        "inputs": [
-                            {
-                                "referenceName": "ds_SkillableSearch",
-                                "type": "DatasetReference",
-                                "parameters": {
-                                    "relativeUrl": {
-                                        "value": "@concat('labinstance/search?start=', string(pipeline().parameters.StartEpoch), '&end=', string(pipeline().parameters.EndEpoch), '&pageIndex=', string(item()), '&pageSize=', string(pipeline().parameters.PageSize), '&sort=start%20desc&mode=10&api_key=', uriComponent(variables('ApiKeyVar')))",
-                                        "type": "Expression"
-                                    }
-                                }
-                            }
-                        ],
-                        "outputs": [
-                            {
-                                "referenceName": "ds_SqlInstances",
-                                "type": "DatasetReference",
-                                "parameters": {}
-                            }
-                        ]
-                    },
-                    {
-                        "name": "SkipTimedOutPage",
-                        "type": "Wait",
-                        "dependsOn": [
-                            {
-                                "activity": "CopySearchResultsToSql",
-                                "dependencyConditions": [
-                                    "Failed"
-                                ]
-                            }
-                        ],
-                        "userProperties": [],
-                        "typeProperties": {
-                            "waitTimeInSeconds": 1
-                        }
-                    }
-                ]
             }
         }
     ],

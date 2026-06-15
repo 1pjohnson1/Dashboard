@@ -285,9 +285,7 @@ BEGIN
                       / COUNT(*)) * 100
                 ELSE 0 END AS DECIMAL(5,2)
         )                                                               AS ErrorRate,
-        SUM(CASE WHEN ErrorCount > 0
-                  AND (CompletionStatus IS NULL OR CompletionStatus = '')
-                  AND State IN ('Error','Off')
+        SUM(CASE WHEN CompletionStatus IN ('Lab Creation Failed', 'Storage Provisioning Failed', 'Lab Provisioning Failed')
                  THEN 1 ELSE 0 END)                                    AS CreationFailures,
         CAST(AVG(CAST(StartupDuration AS FLOAT)) AS DECIMAL(10,2))    AS AvgStartupDuration
     FROM dbo.tblInstances
