@@ -43,12 +43,19 @@ CREATE TABLE dbo.tblInstances (
     ErrorCount          INT             NOT NULL DEFAULT 0,
     StartupDuration     INT             NULL,
     EstimatedReadySeconds INT           NULL,
-    -- Provisioning latency: how much longer the lab actually took to become
-    -- ready vs. the API's estimate. Positive = slower than estimated.
-    ProvisioningLatency AS (CASE WHEN StartupDuration IS NOT NULL
-                                  AND EstimatedReadySeconds IS NOT NULL
-                                 THEN StartupDuration - EstimatedReadySeconds
-                            END),
+        -- Latency is computed as actual startup minus estimated readiness.
+        -- Positive = slower than expected, negative = faster.
+        Latency             AS (CASE WHEN StartupDuration IS NOT NULL
+                                AND EstimatedReadySeconds IS NOT NULL
+                               THEN StartupDuration - EstimatedReadySeconds
+                           END),
+        -- Startup alert for slow launches (> 300s).
+        StartupAlert        AS (CASE WHEN StartupDuration > 300 THEN 1 ELSE 0 END),
+        -- Backward-compatible alias retained for older queries.
+        ProvisioningLatency AS (CASE WHEN StartupDuration IS NOT NULL
+                                AND EstimatedReadySeconds IS NOT NULL
+                               THEN StartupDuration - EstimatedReadySeconds
+                           END),
     TotalRunTime        INT             NULL,
     TimeInSession       INT             NULL,
     TaskCompletePercent FLOAT           NULL,
@@ -521,6 +528,15 @@ GO
 -- Step 6: Add provisioning-latency columns on tblInstances (idempotent)
 IF COL_LENGTH('dbo.tblInstances', 'EstimatedReadySeconds') IS NULL
     ALTER TABLE dbo.tblInstances ADD EstimatedReadySeconds INT NULL;
+GO
+IF COL_LENGTH('dbo.tblInstances', 'Latency') IS NULL
+    ALTER TABLE dbo.tblInstances ADD Latency AS (CASE WHEN StartupDuration IS NOT NULL
+                                                       AND EstimatedReadySeconds IS NOT NULL
+                                                      THEN StartupDuration - EstimatedReadySeconds
+                                                 END);
+GO
+IF COL_LENGTH('dbo.tblInstances', 'StartupAlert') IS NULL
+    ALTER TABLE dbo.tblInstances ADD StartupAlert AS (CASE WHEN StartupDuration > 300 THEN 1 ELSE 0 END);
 GO
 IF COL_LENGTH('dbo.tblInstances', 'ProvisioningLatency') IS NULL
     ALTER TABLE dbo.tblInstances ADD ProvisioningLatency AS (CASE WHEN StartupDuration IS NOT NULL

@@ -156,8 +156,21 @@ SELECT
         SUM(CASE WHEN CompletionStatus = 'Complete' THEN 1.0 ELSE 0 END)
         / NULLIF(COUNT(*), 0) * 100
     AS DECIMAL(5,2))                                                AS CompletionRatePct,
-    AVG(CAST(StartupDuration AS FLOAT))                             AS AvgStartupSec,
-    AVG(CAST(Latency AS FLOAT))                                     AS AvgLatencySec,
+    AVG(CASE
+        WHEN CompletionStatus NOT IN (
+            'Storage Provisioning Failed','Lab Creation Failed',
+            'Resume Failed','Save Failed')
+         AND StartupDuration IS NOT NULL
+        THEN CAST(StartupDuration AS FLOAT) * 1000
+    END)                                                            AS AvgStartupMs,
+    AVG(CASE
+        WHEN CompletionStatus NOT IN (
+            'Storage Provisioning Failed','Lab Creation Failed',
+            'Resume Failed','Save Failed')
+         AND StartupDuration IS NOT NULL
+         AND EstimatedReadySeconds IS NOT NULL
+        THEN CAST(Latency AS FLOAT) * 1000
+    END)                                                            AS AvgLatencyMs,
     AVG(TaskCompletePercent)                                        AS AvgTaskCompletePct,
     AVG(CAST(TotalRunTime AS FLOAT))                                AS AvgRunTimeSec,
     MIN(StartDateTime)                                              AS EarliestLab,
@@ -194,8 +207,21 @@ SELECT
         SUM(CASE WHEN ExamPassed = 1 THEN 1.0 ELSE 0 END)
         / NULLIF(SUM(CASE WHEN IsExam = 1 THEN 1 ELSE 0 END), 0) * 100
     AS DECIMAL(5,2))                                                AS ExamPassRatePct,
-    AVG(CAST(StartupDuration AS FLOAT))                             AS AvgStartupSec,
-    AVG(CAST(Latency AS FLOAT))                                     AS AvgLatencySec
+    AVG(CASE
+        WHEN CompletionStatus NOT IN (
+            'Storage Provisioning Failed','Lab Creation Failed',
+            'Resume Failed','Save Failed')
+         AND StartupDuration IS NOT NULL
+        THEN CAST(StartupDuration AS FLOAT) * 1000
+    END)                                                            AS AvgStartupMs,
+    AVG(CASE
+        WHEN CompletionStatus NOT IN (
+            'Storage Provisioning Failed','Lab Creation Failed',
+            'Resume Failed','Save Failed')
+         AND StartupDuration IS NOT NULL
+         AND EstimatedReadySeconds IS NOT NULL
+        THEN CAST(Latency AS FLOAT) * 1000
+    END)                                                            AS AvgLatencyMs
 FROM dbo.tblInstances
 WHERE [Start] >= DATEDIFF(SECOND, '1970-01-01', DATEADD(DAY, -7, SYSUTCDATETIME()))
 GROUP BY LabProfileId, LabProfileName, SeriesName;
@@ -301,8 +327,21 @@ BEGIN
             SUM(CASE WHEN CompletionStatus = 'Complete' THEN 1.0 ELSE 0 END)
             / NULLIF(COUNT(*), 0) * 100
         AS DECIMAL(5,2))                                                AS CompletionRatePct,
-        AVG(CAST(StartupDuration AS FLOAT))                             AS AvgStartupSec,
-        AVG(CAST(StartupDuration - EstimatedReadySeconds AS FLOAT))     AS AvgLatencySec,
+        AVG(CASE
+            WHEN CompletionStatus NOT IN (
+                'Storage Provisioning Failed','Lab Creation Failed',
+                'Resume Failed','Save Failed')
+             AND StartupDuration IS NOT NULL
+            THEN CAST(StartupDuration AS FLOAT) * 1000
+        END)                                                            AS AvgStartupMs,
+        AVG(CASE
+            WHEN CompletionStatus NOT IN (
+                'Storage Provisioning Failed','Lab Creation Failed',
+                'Resume Failed','Save Failed')
+             AND StartupDuration IS NOT NULL
+             AND EstimatedReadySeconds IS NOT NULL
+            THEN CAST(Latency AS FLOAT) * 1000
+        END)                                                            AS AvgLatencyMs,
         AVG(TaskCompletePercent)                                        AS AvgTaskCompletePct,
         AVG(CAST(TotalRunTime AS FLOAT))                                AS AvgRunTimeSec
     FROM dbo.tblInstances
@@ -341,8 +380,21 @@ BEGIN
         SUM(CASE WHEN ErrorCount > 0 THEN 1 ELSE 0 END)                AS WithErrors,
         SUM(CASE WHEN ExamPassed = 1 THEN 1 ELSE 0 END)                AS ExamsPassed,
         SUM(CASE WHEN IsExam = 1 THEN 1 ELSE 0 END)                    AS ExamInstances,
-        AVG(CAST(StartupDuration AS FLOAT))                             AS AvgStartupSec,
-        AVG(CAST(StartupDuration - EstimatedReadySeconds AS FLOAT))     AS AvgLatencySec
+        AVG(CASE
+            WHEN CompletionStatus NOT IN (
+                'Storage Provisioning Failed','Lab Creation Failed',
+                'Resume Failed','Save Failed')
+             AND StartupDuration IS NOT NULL
+            THEN CAST(StartupDuration AS FLOAT) * 1000
+        END)                                                            AS AvgStartupMs,
+        AVG(CASE
+            WHEN CompletionStatus NOT IN (
+                'Storage Provisioning Failed','Lab Creation Failed',
+                'Resume Failed','Save Failed')
+             AND StartupDuration IS NOT NULL
+             AND EstimatedReadySeconds IS NOT NULL
+            THEN CAST(Latency AS FLOAT) * 1000
+        END)                                                            AS AvgLatencyMs
     FROM dbo.tblInstances
     WHERE [Start] >= DATEDIFF(SECOND, '1970-01-01', DATEADD(HOUR, -@HoursBack, SYSUTCDATETIME()))
       AND (@LabProfileName IS NULL OR LabProfileName LIKE '%' + @LabProfileName + '%')
