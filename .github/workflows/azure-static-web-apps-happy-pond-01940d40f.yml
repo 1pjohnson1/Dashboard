@@ -18,7 +18,15 @@ jobs:
     runs-on: ubuntu-latest
     name: Build and Deploy
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
+
+      - name: Verify deployment token is set
+        run: |
+          if [ -z "${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}" ]; then
+            echo "::error::Secret AZURE_STATIC_WEB_APPS_API_TOKEN is not set or is empty."
+            echo "::error::To fix: Azure Portal → Static Web Apps → happy-pond-01940d40f → Manage deployment token → copy value → GitHub repo Settings → Secrets → update AZURE_STATIC_WEB_APPS_API_TOKEN."
+            exit 1
+          fi
 
       - name: Build And Deploy
         uses: Azure/static-web-apps-deploy@v1
@@ -39,5 +47,6 @@ jobs:
         uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "close"
-          app_location: "/dashboard"
+          app_location: "./dashboard"
