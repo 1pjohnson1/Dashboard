@@ -21,8 +21,10 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Verify deployment token is set
+        env:
+          SWA_TOKEN: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
         run: |
-          if [ -z "${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}" ]; then
+          if [ -z "$SWA_TOKEN" ]; then
             echo "::error::Secret AZURE_STATIC_WEB_APPS_API_TOKEN is not set or is empty."
             echo "::error::To fix: Azure Portal → Static Web Apps → happy-pond-01940d40f → Manage deployment token → copy value → GitHub repo Settings → Secrets → update AZURE_STATIC_WEB_APPS_API_TOKEN."
             exit 1
